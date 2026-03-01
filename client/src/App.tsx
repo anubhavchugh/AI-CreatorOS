@@ -4,32 +4,57 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import DashboardLayout from "./components/DashboardLayout";
+import Dashboard from "./pages/Dashboard";
+import Characters from "./pages/Characters";
+import ContentPipeline from "./pages/ContentPipeline";
+import ContentCalendar from "./pages/ContentCalendar";
+import Analytics from "./pages/Analytics";
+import Monetization from "./pages/Monetization";
+import FanInteractions from "./pages/FanInteractions";
+import Settings from "./pages/Settings";
+import Landing from "./pages/Landing";
 
+function DashboardRouter() {
+  return (
+    <DashboardLayout>
+      <Switch>
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/characters" component={Characters} />
+        <Route path="/pipeline" component={ContentPipeline} />
+        <Route path="/calendar" component={ContentCalendar} />
+        <Route path="/analytics" component={Analytics} />
+        <Route path="/monetization" component={Monetization} />
+        <Route path="/fans" component={FanInteractions} />
+        <Route path="/settings" component={Settings} />
+        <Route component={Dashboard} />
+      </Switch>
+    </DashboardLayout>
+  );
+}
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Landing} />
+      <Route path="/dashboard" nest component={DashboardRouter} />
+      <Route path="/characters" component={DashboardRouter} />
+      <Route path="/pipeline" component={DashboardRouter} />
+      <Route path="/calendar" component={DashboardRouter} />
+      <Route path="/analytics" component={DashboardRouter} />
+      <Route path="/monetization" component={DashboardRouter} />
+      <Route path="/fans" component={DashboardRouter} />
+      <Route path="/settings" component={DashboardRouter} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark" switchable>
         <TooltipProvider>
           <Toaster />
           <Router />
