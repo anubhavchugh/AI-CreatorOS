@@ -17,6 +17,7 @@ import Landing from "./pages/Landing";
 import AdminPanel from "./pages/AdminPanel";
 import CharacterWizard from "./pages/CharacterWizard";
 import GenerateContent from "./pages/GenerateContent";
+import ContentLibrary from "./pages/ContentLibrary";
 
 function DashboardRouter() {
   return (
@@ -27,6 +28,7 @@ function DashboardRouter() {
         <Route path="/characters/new" component={CharacterWizard} />
         <Route path="/pipeline" component={ContentPipeline} />
         <Route path="/generate" component={GenerateContent} />
+        <Route path="/library" component={ContentLibrary} />
         <Route path="/calendar" component={ContentCalendar} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/monetization" component={Monetization} />
@@ -48,6 +50,7 @@ function Router() {
       <Route path="/characters/new" component={DashboardRouter} />
       <Route path="/pipeline" component={DashboardRouter} />
       <Route path="/generate" component={DashboardRouter} />
+      <Route path="/library" component={DashboardRouter} />
       <Route path="/calendar" component={DashboardRouter} />
       <Route path="/analytics" component={DashboardRouter} />
       <Route path="/monetization" component={DashboardRouter} />

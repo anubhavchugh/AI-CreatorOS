@@ -47,3 +47,23 @@
 - [x] Update content items in database with generated assets
 - [x] Write vitest tests for pipeline procedures (14 tests, 47 total)
 - [x] Save checkpoint and deliver
+
+## Phase 8: Content Library
+- [x] Content Library page with gallery/list view toggle
+- [x] Filter by character, platform, status, content type
+- [x] Search by title/topic
+- [x] Content detail view (script preview, audio player, thumbnail)
+- [x] Delete/archive content actions
+- [x] Add Content Library to sidebar navigation
+- [x] Backend tRPC procedures for listing/filtering content
+
+## Phase 9: YouTube/TikTok Publishing Flow
+- [x] Server-side YouTube upload using creator's API key
+- [x] Server-side TikTok upload using creator's API key
+- [x] Instagram publishing placeholder
+- [x] "Publish" button on content items in Content Library
+- [x] Publish modal with platform selection and metadata (title, description, tags)
+- [x] Publishing status tracking (draft → publishing → published → failed)
+- [x] Published URL stored in database
+- [x] Write vitest tests for publishing and content library procedures (59 tests total)
+- [x] Save checkpoint and deliver

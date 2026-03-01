@@ -212,6 +212,65 @@ export async function updateContentItem(id: number, data: Partial<InsertContentI
   await db.update(contentItems).set(data).where(eq(contentItems.id, id));
 }
 
+export async function deleteContentItem(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(contentItems).where(and(eq(contentItems.id, id), eq(contentItems.userId, userId)));
+}
+
+export async function getContentItemById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(contentItems).where(eq(contentItems.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserContentWithCharacters(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: contentItems.id,
+      characterId: contentItems.characterId,
+      userId: contentItems.userId,
+      title: contentItems.title,
+      type: contentItems.type,
+      platform: contentItems.platform,
+      status: contentItems.status,
+      script: contentItems.script,
+      mediaUrl: contentItems.mediaUrl,
+      thumbnailUrl: contentItems.thumbnailUrl,
+      description: contentItems.description,
+      tags: contentItems.tags,
+      publishedUrl: contentItems.publishedUrl,
+      publishError: contentItems.publishError,
+      scheduledAt: contentItems.scheduledAt,
+      publishedAt: contentItems.publishedAt,
+      views: contentItems.views,
+      likes: contentItems.likes,
+      comments: contentItems.comments,
+      createdAt: contentItems.createdAt,
+      updatedAt: contentItems.updatedAt,
+      characterName: characters.name,
+      characterAvatarUrl: characters.avatarUrl,
+    })
+    .from(contentItems)
+    .leftJoin(characters, eq(contentItems.characterId, characters.id))
+    .where(eq(contentItems.userId, userId))
+    .orderBy(desc(contentItems.createdAt));
+}
+
+export async function getPlatformConnectionForUser(userId: number, platform: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(platformConnections)
+    .where(and(eq(platformConnections.userId, userId), eq(platformConnections.platform, platform), eq(platformConnections.isConnected, true)))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
 // ==================== CREATOR API KEYS ====================
 
 export async function getUserApiKeys(userId: number) {

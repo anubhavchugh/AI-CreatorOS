@@ -17,6 +17,10 @@ import {
   getUserContentItems,
   getCharacterContentItems,
   updateContentItem,
+  deleteContentItem,
+  getContentItemById,
+  getUserContentWithCharacters,
+  getPlatformConnectionForUser,
   getUserApiKeys,
   upsertApiKey,
   deleteApiKey,
@@ -274,6 +278,125 @@ export const appRouter = router({
         limits: PLANS[(ctx.user.plan || "free") as PlanKey]?.limits || {},
       };
     }),
+  }),
+
+  // ==================== CONTENT LIBRARY ====================
+  library: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return getUserContentWithCharacters(ctx.user.id);
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const item = await getContentItemById(input.id);
+        if (!item || item.userId !== ctx.user.id) {
+          throw new Error("Content not found");
+        }
+        return item;
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const item = await getContentItemById(input.id);
+        if (!item || item.userId !== ctx.user.id) {
+          throw new Error("Content not found");
+        }
+        await deleteContentItem(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    updateMeta: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        platform: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const item = await getContentItemById(input.id);
+        if (!item || item.userId !== ctx.user.id) {
+          throw new Error("Content not found");
+        }
+        const { id, ...data } = input;
+        await updateContentItem(id, data);
+        return { success: true };
+      }),
+
+    publish: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        platform: z.string(),
+        title: z.string(),
+        description: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const item = await getContentItemById(input.id);
+        if (!item || item.userId !== ctx.user.id) {
+          throw new Error("Content not found");
+        }
+
+        // Check platform connection
+        const connection = await getPlatformConnectionForUser(ctx.user.id, input.platform);
+        if (!connection) {
+          throw new Error(`NO_PLATFORM_KEY: Connect your ${input.platform} account in Settings → Platforms to publish content.`);
+        }
+
+        // Update status to publishing
+        await updateContentItem(input.id, {
+          status: "scheduled",
+          platform: input.platform,
+          description: input.description || null,
+          tags: input.tags || [],
+        });
+
+        try {
+          // Attempt to publish using platform API
+          const { publishToYouTube, publishToTikTok } = await import("./pipeline/platformPublisher");
+
+          let publishedUrl: string;
+
+          if (input.platform === "youtube") {
+            publishedUrl = await publishToYouTube({
+              accessToken: connection.accessToken || connection.apiKey || "",
+              title: input.title,
+              description: input.description || "",
+              tags: input.tags || [],
+              mediaUrl: item.mediaUrl,
+              thumbnailUrl: item.thumbnailUrl,
+            });
+          } else if (input.platform === "tiktok") {
+            publishedUrl = await publishToTikTok({
+              accessToken: connection.accessToken || connection.apiKey || "",
+              title: input.title,
+              description: input.description || "",
+              mediaUrl: item.mediaUrl,
+            });
+          } else {
+            throw new Error(`Publishing to ${input.platform} is not yet supported. YouTube and TikTok are available.`);
+          }
+
+          // Mark as published
+          await updateContentItem(input.id, {
+            status: "published",
+            publishedUrl,
+            publishedAt: new Date(),
+            publishError: null,
+          });
+
+          return { success: true, publishedUrl };
+        } catch (error: any) {
+          // Mark as failed with error
+          await updateContentItem(input.id, {
+            status: "failed",
+            publishError: error.message || "Publishing failed",
+          });
+          throw error;
+        }
+      }),
   }),
 
   // ==================== CONTENT PIPELINE ====================

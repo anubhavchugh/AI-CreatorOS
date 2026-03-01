@@ -15,6 +15,13 @@
       "when": 1772371685916,
       "tag": "0001_cloudy_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1772374346037,
+      "tag": "0002_solid_ezekiel",
+      "breakpoints": true
     }
   ]
 }

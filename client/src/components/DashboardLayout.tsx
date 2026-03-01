@@ -23,6 +23,7 @@ import {
   Zap,
   Shield,
   Sparkles,
+  FolderOpen,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { path: "/characters", label: "Characters", icon: Users },
   { path: "/pipeline", label: "Content Pipeline", icon: Clapperboard },
   { path: "/generate", label: "Generate Content", icon: Sparkles },
+  { path: "/library", label: "Content Library", icon: FolderOpen },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/analytics", label: "Analytics", icon: BarChart3 },
   { path: "/monetization", label: "Monetization", icon: DollarSign },

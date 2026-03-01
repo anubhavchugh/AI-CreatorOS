@@ -14,7 +14,8 @@ import { useLocation } from "wouter";
 import {
   Wand2, Mic, ImageIcon, CheckCircle2, AlertCircle, Loader2,
   ArrowLeft, ArrowRight, Sparkles, Play, Download, RotateCcw,
-  ChevronDown, Settings, ExternalLink, SkipForward, Volume2
+  ChevronDown, Settings, ExternalLink, SkipForward, Volume2,
+  FolderOpen, Upload
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -813,10 +814,14 @@ export default function GenerateContent() {
             )}
 
             {/* Actions */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <Button variant="outline" onClick={handleReset} className="gap-2">
                 <RotateCcw className="w-4 h-4" />
                 Generate Another
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/library")} className="gap-2">
+                <FolderOpen className="w-4 h-4" />
+                View in Library
               </Button>
               <Button variant="outline" onClick={() => navigate("/pipeline")} className="gap-2">
                 <ArrowLeft className="w-4 h-4" />
