@@ -129,5 +129,9 @@
 - [x] Fix 'Failed to save some settings' error — rewrote Settings page with better error handling
 - [x] Map user's keys: OpenAI (script), ElevenLabs (voice), Venice.ai (image), BFL/Runway (video)
 - [x] Update content pipeline — Venice.ai for images, BFL/Runway for video (future)
-- [ ] Test full flow: character creation → content generation → pipeline
+- [x] Fix image pipeline: BFL FLUX primary, Venice.ai fallback
+- [ ] Add video generation step (compose images + audio into video via ffmpeg)
+- [ ] Update pipeline UI to show video step progress
+- [ ] Verify YouTube upload integration works end-to-end
+- [ ] Test full flow: character → script → voice → image → video → YouTube
 - [ ] Push to Railway and verify

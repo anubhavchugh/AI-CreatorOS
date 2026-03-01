@@ -50,6 +50,7 @@ const AI_SERVICES = {
     icon: Image,
     desc: "AI model for image/thumbnail generation",
     options: [
+      { value: "flux", label: "FLUX Pro (Black Forest Labs)", keyPrefix: "bfl_" },
       { value: "venice", label: "Venice.ai (FLUX Pro)", keyPrefix: "vk-" },
       { value: "dalle", label: "DALL-E 3 (OpenAI)", keyPrefix: "sk-" },
       { value: "replicate", label: "Replicate (Flux)", keyPrefix: "r8_" },
@@ -58,9 +59,9 @@ const AI_SERVICES = {
   video: {
     label: "Video Engine",
     icon: Video,
-    desc: "AI model for video generation",
+    desc: "AI model for video generation (coming soon)",
     options: [
-      { value: "runway", label: "Runway Gen-3 (Black Forest Labs)", keyPrefix: "bfl_" },
+      { value: "runway", label: "Runway Gen-3", keyPrefix: "rw-" },
     ],
   },
 } as const;
@@ -115,7 +116,7 @@ export default function Settings() {
   const [selectedModels, setSelectedModels] = useState<Record<ServiceType, string>>({
     script: "openai",
     voice: "elevenlabs",
-    image: "venice",
+    image: "flux",
     video: "runway",
   });
 

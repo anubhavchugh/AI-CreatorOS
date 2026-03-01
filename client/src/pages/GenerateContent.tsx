@@ -4,7 +4,8 @@
  * Flow:
  * 1. Select character → Enter topic & settings
  * 2. Hit "Generate" → Watch pipeline progress step by step
- * 3. Review results (script, audio, thumbnail)
+ * 3. Review results (script, audio, thumbnail, video)
+ * 4. Publish to YouTube or download assets
  */
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +15,7 @@ import { useLocation } from "wouter";
 import {
   Wand2, Mic, ImageIcon, CheckCircle2, AlertCircle, Loader2,
   ArrowLeft, ArrowRight, Sparkles, Play, Download, RotateCcw,
-  ChevronDown, Settings, ExternalLink, SkipForward, Volume2,
+  Settings, SkipForward, Volume2, Video,
   FolderOpen, Upload
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +46,7 @@ type PipelineState = {
     scripting: { status: PipelineStepStatus; result?: string; error?: string };
     voice: { status: PipelineStepStatus; result?: string; error?: string };
     thumbnail: { status: PipelineStepStatus; result?: string; error?: string };
+    video: { status: PipelineStepStatus; result?: string; error?: string };
   };
 };
 
@@ -130,7 +132,7 @@ function StepIndicator({
           )}
           {status === "skipped" && (
             <Badge variant="outline" className="text-xs border-amber-500 text-amber-500">
-              Skipped — No API Key
+              Skipped
             </Badge>
           )}
         </div>
@@ -168,6 +170,7 @@ export default function GenerateContent() {
       scripting: { status: "pending" },
       voice: { status: "pending" },
       thumbnail: { status: "pending" },
+      video: { status: "pending" },
     },
   });
 
@@ -175,6 +178,7 @@ export default function GenerateContent() {
   const [generatedScript, setGeneratedScript] = useState<string | null>(null);
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [missingKeys, setMissingKeys] = useState<string[]>([]);
   const [contentId, setContentId] = useState<number | null>(null);
 
@@ -193,6 +197,7 @@ export default function GenerateContent() {
           scripting: { status: "running" },
           voice: { status: "pending" },
           thumbnail: { status: "pending" },
+          video: { status: "pending" },
         },
       });
     },
@@ -201,6 +206,7 @@ export default function GenerateContent() {
       setGeneratedScript(data.script);
       setGeneratedAudioUrl(data.audioUrl);
       setGeneratedThumbnailUrl(data.thumbnailUrl);
+      setGeneratedVideoUrl(data.videoUrl);
       setMissingKeys(data.missingKeys);
 
       setPipelineState({
@@ -213,6 +219,9 @@ export default function GenerateContent() {
           thumbnail: data.thumbnailSkipped
             ? { status: "skipped", result: "Add an image API key in Settings to enable" }
             : { status: "complete", result: `Generated with ${data.imageModel}` },
+          video: data.videoSkipped
+            ? { status: "skipped", result: "Needs both voice audio and thumbnail to compose video" }
+            : { status: "complete", result: "Video composed from image + audio" },
         },
       });
 
@@ -235,6 +244,9 @@ export default function GenerateContent() {
           thumbnail: prev.steps.thumbnail.status === "running"
             ? { status: "failed", error: errorMsg }
             : prev.steps.thumbnail,
+          video: prev.steps.video.status === "running"
+            ? { status: "failed", error: errorMsg }
+            : prev.steps.video,
         },
       }));
 
@@ -251,7 +263,7 @@ export default function GenerateContent() {
     if (generateMutation.isPending && pipelineState.phase === "generating") {
       const timer1 = setTimeout(() => {
         setPipelineState((prev) => {
-          if (prev.steps.scripting.status === "running") return prev;
+          if (prev.steps.scripting.status !== "running") return prev;
           return {
             ...prev,
             steps: {
@@ -277,9 +289,24 @@ export default function GenerateContent() {
         });
       }, 18000);
 
+      const timer3 = setTimeout(() => {
+        setPipelineState((prev) => {
+          if (prev.steps.thumbnail.status !== "running") return prev;
+          return {
+            ...prev,
+            steps: {
+              ...prev.steps,
+              thumbnail: { status: "complete", result: "Thumbnail generated" },
+              video: { status: "running" },
+            },
+          };
+        });
+      }, 30000);
+
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
+        clearTimeout(timer3);
       };
     }
   }, [generateMutation.isPending, pipelineState.phase]);
@@ -296,10 +323,10 @@ export default function GenerateContent() {
 
     generateMutation.mutate({
       characterId: selectedCharacterId,
-      topic: topic.trim(),
       contentType: contentType as any,
       platform,
       tone,
+      topic,
       duration: duration || undefined,
       additionalInstructions: additionalInstructions || undefined,
     });
@@ -312,11 +339,13 @@ export default function GenerateContent() {
         scripting: { status: "pending" },
         voice: { status: "pending" },
         thumbnail: { status: "pending" },
+        video: { status: "pending" },
       },
     });
     setGeneratedScript(null);
     setGeneratedAudioUrl(null);
     setGeneratedThumbnailUrl(null);
+    setGeneratedVideoUrl(null);
     setMissingKeys([]);
     setContentId(null);
   };
@@ -340,7 +369,7 @@ export default function GenerateContent() {
             Generate Content
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Create content end-to-end using your AI APIs
+            Create content end-to-end: Script → Voice → Image → Video
           </p>
         </div>
       </div>
@@ -358,7 +387,7 @@ export default function GenerateContent() {
               <p className="font-semibold text-amber-500 text-sm">No Script API Key Configured</p>
               <p className="text-xs text-muted-foreground mt-1">
                 You need at least an OpenAI, Anthropic, or Google API key to generate scripts.
-                Voice and image generation keys are optional but recommended.
+                Voice, image, and video generation keys are optional but recommended for the full pipeline.
               </p>
               <Button
                 variant="outline"
@@ -516,13 +545,13 @@ export default function GenerateContent() {
               </CardContent>
             </Card>
 
-            {/* API Keys Status */}
+            {/* AI Keys Status */}
             <Card className="border-border/50">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">3. Your AI Stack</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     {
                       label: "Script Engine",
@@ -539,8 +568,15 @@ export default function GenerateContent() {
                     {
                       label: "Image Engine",
                       icon: ImageIcon,
-                      services: ["replicate", "fal", "openai"],
+                      services: ["flux", "venice", "dalle", "replicate", "openai"],
                       required: false,
+                    },
+                    {
+                      label: "Video Engine",
+                      icon: Video,
+                      services: ["runway"],
+                      required: false,
+                      note: "Auto-composed from image + audio",
                     },
                   ].map((engine) => {
                     const hasKey = apiKeys?.some(
@@ -549,11 +585,13 @@ export default function GenerateContent() {
                     const activeKey = apiKeys?.find(
                       (k: any) => engine.services.includes(k.service) && k.isActive
                     );
+                    // Video engine doesn't need a key — it auto-composes
+                    const isVideoAuto = engine.label === "Video Engine";
                     return (
                       <div
                         key={engine.label}
                         className={`p-3 rounded-xl border-2 ${
-                          hasKey
+                          hasKey || isVideoAuto
                             ? "border-emerald-500/30 bg-emerald-500/5"
                             : engine.required
                             ? "border-red-500/30 bg-red-500/5"
@@ -564,7 +602,11 @@ export default function GenerateContent() {
                           <engine.icon className="w-4 h-4" />
                           <span className="text-sm font-medium">{engine.label}</span>
                         </div>
-                        {hasKey ? (
+                        {isVideoAuto ? (
+                          <p className="text-xs text-emerald-400">
+                            ✓ Auto-composed (ffmpeg)
+                          </p>
+                        ) : hasKey ? (
                           <p className="text-xs text-emerald-400">
                             ✓ {activeKey?.service} connected
                           </p>
@@ -640,11 +682,19 @@ export default function GenerateContent() {
                 />
                 <StepIndicator
                   step={3}
-                  label="Thumbnail Generation"
+                  label="Thumbnail / Image Generation"
                   icon={ImageIcon}
                   status={pipelineState.steps.thumbnail.status}
                   result={pipelineState.steps.thumbnail.result}
                   error={pipelineState.steps.thumbnail.error}
+                />
+                <StepIndicator
+                  step={4}
+                  label="Video Composition"
+                  icon={Video}
+                  status={pipelineState.steps.video.status}
+                  result={pipelineState.steps.video.result}
+                  error={pipelineState.steps.video.error}
                 />
               </CardContent>
             </Card>
@@ -652,7 +702,8 @@ export default function GenerateContent() {
             {/* Show error retry */}
             {(pipelineState.steps.scripting.status === "failed" ||
               pipelineState.steps.voice.status === "failed" ||
-              pipelineState.steps.thumbnail.status === "failed") && (
+              pipelineState.steps.thumbnail.status === "failed" ||
+              pipelineState.steps.video.status === "failed") && (
               <div className="flex gap-3">
                 <Button variant="outline" onClick={handleReset} className="gap-2">
                   <RotateCcw className="w-4 h-4" />
@@ -701,10 +752,17 @@ export default function GenerateContent() {
                 />
                 <StepIndicator
                   step={3}
-                  label="Thumbnail Generation"
+                  label="Thumbnail / Image Generation"
                   icon={ImageIcon}
                   status={pipelineState.steps.thumbnail.status}
                   result={pipelineState.steps.thumbnail.result}
+                />
+                <StepIndicator
+                  step={4}
+                  label="Video Composition"
+                  icon={Video}
+                  status={pipelineState.steps.video.status}
+                  result={pipelineState.steps.video.result}
                 />
               </CardContent>
             </Card>
@@ -726,6 +784,50 @@ export default function GenerateContent() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Generated Video (show first as the main output) */}
+            {generatedVideoUrl && (
+              <Card className="border-border/50 border-primary/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Video className="w-4 h-4 text-primary" />
+                    Generated Video
+                    <Badge variant="outline" className="text-xs border-primary text-primary">Main Output</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-xl overflow-hidden border border-border/50 bg-black">
+                    <video
+                      controls
+                      className="w-full h-auto max-h-[500px]"
+                      src={generatedVideoUrl}
+                      poster={generatedThumbnailUrl || undefined}
+                    >
+                      Your browser does not support the video element.
+                    </video>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={generatedVideoUrl} download target="_blank" rel="noopener noreferrer">
+                        <Download className="w-3 h-3 mr-1" />
+                        Download MP4
+                      </a>
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => {
+                        toast.info("YouTube upload coming soon! For now, download the video and upload manually.");
+                      }}
+                    >
+                      <Upload className="w-3 h-3" />
+                      Publish to YouTube
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* Generated Script */}

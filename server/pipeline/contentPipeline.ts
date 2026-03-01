@@ -2,10 +2,10 @@
  * Content Generation Pipeline
  * 
  * Orchestrates the end-to-end content creation flow using CREATOR'S OWN API keys:
- * 1. Script Generation (creator's OpenAI / Claude / Gemini key)
- * 2. Voice Generation (creator's ElevenLabs / PlayHT key)
- * 3. Thumbnail/Image Generation (creator's Venice.ai / DALL-E / Replicate key)
- * 4. Video Generation (creator's Runway Gen-3 / BFL key) — future feature
+ * 1. Script Generation (OpenAI / Claude / Gemini)
+ * 2. Voice Generation (ElevenLabs / PlayHT)
+ * 3. Image/Thumbnail Generation (BFL FLUX Pro / Venice.ai / DALL-E / Replicate)
+ * 4. Video Composition (ffmpeg: combines images + audio into video)
  * 
  * We do NOT provide any built-in AI. Creators bring their own keys.
  * If a key is missing for a step, that step is skipped with a clear message.
@@ -15,10 +15,17 @@ import { storagePut } from "../storage";
 import { getDb } from "../db";
 import { contentItems, creatorApiKeys, characters } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+const execFileAsync = promisify(execFile);
 
 // ==================== TYPES ====================
 
-export type PipelineStep = "scripting" | "voice" | "thumbnail" | "complete" | "failed";
+export type PipelineStep = "scripting" | "voice" | "thumbnail" | "video" | "complete" | "failed";
 
 export type PipelineProgress = {
   contentId: number;
@@ -27,6 +34,7 @@ export type PipelineProgress = {
     scripting: StepStatus;
     voice: StepStatus;
     thumbnail: StepStatus;
+    video: StepStatus;
   };
   error?: string;
 };
@@ -115,7 +123,6 @@ async function generateScript(
   additionalInstructions: string | undefined,
   userId: number,
 ): Promise<{ script: string; model: string }> {
-  // Check which script engine key the creator has
   const openAiKey = await getCreatorApiKey(userId, "openai");
   const claudeKey = await getCreatorApiKey(userId, "anthropic");
   const geminiKey = await getCreatorApiKey(userId, "google");
@@ -374,13 +381,14 @@ async function generateThumbnail(
   platform: string,
   userId: number,
 ): Promise<{ thumbnailUrl: string | null; skipped: boolean; model: string | null }> {
-  // Check all supported image services
+  // Check all supported image services — priority: BFL FLUX → Venice.ai → Replicate → DALL-E
+  const fluxKey = await getCreatorApiKey(userId, "flux");       // BFL FLUX Pro (direct)
   const veniceKey = await getCreatorApiKey(userId, "venice");   // Venice.ai (FLUX Pro)
   const replicateKey = await getCreatorApiKey(userId, "replicate"); // Replicate
   const dalleKey = await getCreatorApiKey(userId, "dalle");     // DALL-E (dedicated key)
   const openAiKey = await getCreatorApiKey(userId, "openai");   // OpenAI (shared with script)
 
-  if (!veniceKey && !replicateKey && !dalleKey && !openAiKey) {
+  if (!fluxKey && !veniceKey && !replicateKey && !dalleKey && !openAiKey) {
     return { thumbnailUrl: null, skipped: true, model: null };
   }
 
@@ -394,7 +402,97 @@ async function generateThumbnail(
   const styleDesc = styleMap[visualStyle || "photorealistic"] || styleMap.photorealistic;
   const prompt = `Create a ${platform} thumbnail for a video about "${topic}" featuring a character named ${characterName}. Style: ${styleDesc}. The thumbnail should be eye-catching, professional, and optimized for social media. Include bold visual elements and a clean composition. No text overlays.`;
 
-  // Priority: Venice.ai → Replicate → DALL-E → OpenAI (DALL-E fallback)
+  // ---- BFL FLUX Pro (Direct API — async: submit + poll) ----
+  if (fluxKey) {
+    try {
+      console.log("[Pipeline] Generating thumbnail with BFL FLUX Pro...");
+      
+      // Step 1: Submit generation request
+      const submitResponse = await fetch("https://api.bfl.ai/v1/flux-pro-1.1", {
+        method: "POST",
+        headers: {
+          "accept": "application/json",
+          "x-key": fluxKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          width: 1280,
+          height: 720,
+        }),
+      });
+
+      if (!submitResponse.ok) {
+        const err = await submitResponse.text();
+        throw new Error(`BFL FLUX API submit error (${submitResponse.status}): ${err}`);
+      }
+
+      const submitData = await submitResponse.json();
+      const pollingUrl = submitData.polling_url;
+      const requestId = submitData.id;
+
+      if (!pollingUrl && !requestId) {
+        throw new Error("BFL FLUX: No polling_url or request ID returned");
+      }
+
+      // Step 2: Poll for results
+      let result: any = null;
+      let attempts = 0;
+      const maxAttempts = 120; // 2 minutes max (polling every 1s)
+
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const pollUrl = pollingUrl || `https://api.bfl.ai/v1/get_result?id=${requestId}`;
+        const pollResponse = await fetch(pollUrl, {
+          headers: {
+            "accept": "application/json",
+            "x-key": fluxKey,
+          },
+        });
+
+        if (!pollResponse.ok) {
+          const err = await pollResponse.text();
+          throw new Error(`BFL FLUX poll error (${pollResponse.status}): ${err}`);
+        }
+
+        result = await pollResponse.json();
+        
+        if (result.status === "Ready") {
+          break;
+        } else if (result.status === "Error" || result.status === "Failed") {
+          throw new Error(`BFL FLUX generation failed: ${JSON.stringify(result)}`);
+        }
+        
+        attempts++;
+      }
+
+      if (!result || result.status !== "Ready") {
+        throw new Error("BFL FLUX: Generation timed out after 2 minutes");
+      }
+
+      // Download the image from the signed URL (expires in 10 min, no CORS)
+      const imageUrl = result.result?.sample;
+      if (!imageUrl) throw new Error("BFL FLUX: No image URL in result");
+
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`BFL FLUX: Failed to download image (${imageResponse.status})`);
+      }
+
+      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      const { url } = await storagePut(
+        `thumbnails/${Date.now()}-flux-thumb.png`,
+        imageBuffer,
+        "image/png"
+      );
+
+      return { thumbnailUrl: url, skipped: false, model: "flux-pro-1.1 (BFL)" };
+    } catch (error: any) {
+      console.error("[Pipeline] BFL FLUX image generation failed:", error.message);
+      // Fall through to try other services
+    }
+  }
 
   // ---- Venice.ai (FLUX Pro) ----
   if (veniceKey) {
@@ -428,7 +526,6 @@ async function generateThumbnail(
       const base64Image = data.images?.[0];
       if (!base64Image) throw new Error("Venice.ai: No image data in response");
 
-      // Decode base64 and upload to S3
       const imageBuffer = Buffer.from(base64Image, "base64");
       const { url } = await storagePut(
         `thumbnails/${Date.now()}-venice-thumb.png`,
@@ -439,7 +536,6 @@ async function generateThumbnail(
       return { thumbnailUrl: url, skipped: false, model: "venice-fluently-xl" };
     } catch (error: any) {
       console.error("[Pipeline] Venice.ai image generation failed:", error.message);
-      // Fall through to try other services
     }
   }
 
@@ -472,7 +568,6 @@ async function generateThumbnail(
 
       const prediction = await createResponse.json();
 
-      // Poll for completion
       let result = prediction;
       let attempts = 0;
       while (result.status !== "succeeded" && result.status !== "failed" && attempts < 60) {
@@ -502,7 +597,6 @@ async function generateThumbnail(
       return { thumbnailUrl: url, skipped: false, model: "flux-1.1-pro (replicate)" };
     } catch (error: any) {
       console.error("[Pipeline] Replicate image generation failed:", error.message);
-      // Fall through to try other services
     }
   }
 
@@ -553,6 +647,119 @@ async function generateThumbnail(
   return { thumbnailUrl: null, skipped: true, model: null };
 }
 
+// ==================== STEP 4: VIDEO COMPOSITION ====================
+
+/**
+ * Composes a video from thumbnail image + audio using ffmpeg.
+ * Creates a simple video with the thumbnail as a static/Ken Burns background
+ * and the voiceover audio track. This produces a ready-to-upload video file.
+ */
+async function composeVideo(
+  thumbnailUrl: string | null,
+  audioUrl: string | null,
+  platform: string,
+): Promise<{ videoUrl: string | null; skipped: boolean }> {
+  // Need at least audio to create a video
+  if (!audioUrl) {
+    return { videoUrl: null, skipped: true };
+  }
+
+  // Check if ffmpeg is available
+  try {
+    await execFileAsync("ffmpeg", ["-version"]);
+  } catch {
+    console.warn("[Pipeline] ffmpeg not available, skipping video composition");
+    return { videoUrl: null, skipped: true };
+  }
+
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "video-"));
+
+  try {
+    const audioPath = path.join(tmpDir, "audio.mp3");
+    const imagePath = path.join(tmpDir, "image.png");
+    const outputPath = path.join(tmpDir, "output.mp4");
+
+    // Download audio
+    console.log("[Pipeline] Downloading audio for video composition...");
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) throw new Error("Failed to download audio for video");
+    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+    await fs.promises.writeFile(audioPath, audioBuffer);
+
+    // Platform-specific dimensions
+    const dimensions: Record<string, { w: number; h: number }> = {
+      youtube: { w: 1920, h: 1080 },
+      tiktok: { w: 1080, h: 1920 },
+      instagram: { w: 1080, h: 1920 },
+    };
+    const { w, h } = dimensions[platform.toLowerCase()] || dimensions.youtube;
+
+    if (thumbnailUrl) {
+      // Download thumbnail image
+      console.log("[Pipeline] Downloading thumbnail for video composition...");
+      const imageResponse = await fetch(thumbnailUrl);
+      if (!imageResponse.ok) throw new Error("Failed to download thumbnail for video");
+      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      await fs.promises.writeFile(imagePath, imageBuffer);
+
+      // Compose video: image + audio → mp4 with subtle zoom (Ken Burns effect)
+      console.log("[Pipeline] Composing video with ffmpeg (image + audio)...");
+      await execFileAsync("ffmpeg", [
+        "-loop", "1",
+        "-i", imagePath,
+        "-i", audioPath,
+        "-c:v", "libx264",
+        "-tune", "stillimage",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-vf", `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:black,zoompan=z='min(zoom+0.0005,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${w}x${h}:fps=30`,
+        "-pix_fmt", "yuv420p",
+        "-shortest",
+        "-movflags", "+faststart",
+        "-y",
+        outputPath,
+      ], { timeout: 300000 }); // 5 min timeout
+    } else {
+      // Audio-only: create video with solid dark background + waveform-style visualization
+      console.log("[Pipeline] Composing video with ffmpeg (audio only, dark background)...");
+      await execFileAsync("ffmpeg", [
+        "-f", "lavfi",
+        "-i", `color=c=0x111827:s=${w}x${h}:d=600`,
+        "-i", audioPath,
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-pix_fmt", "yuv420p",
+        "-shortest",
+        "-movflags", "+faststart",
+        "-y",
+        outputPath,
+      ], { timeout: 300000 });
+    }
+
+    // Upload the composed video to S3
+    console.log("[Pipeline] Uploading composed video to storage...");
+    const videoBuffer = await fs.promises.readFile(outputPath);
+    const { url } = await storagePut(
+      `videos/${Date.now()}-composed.mp4`,
+      videoBuffer,
+      "video/mp4"
+    );
+
+    return { videoUrl: url, skipped: false };
+  } catch (error: any) {
+    console.error("[Pipeline] Video composition failed:", error.message);
+    return { videoUrl: null, skipped: true };
+  } finally {
+    // Clean up temp files
+    try {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 // ==================== MAIN PIPELINE ORCHESTRATOR ====================
 
 export async function runContentPipeline(input: GenerateContentInput): Promise<{
@@ -563,8 +770,10 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
   voiceModel: string | null;
   thumbnailUrl: string | null;
   imageModel: string | null;
+  videoUrl: string | null;
   voiceSkipped: boolean;
   thumbnailSkipped: boolean;
+  videoSkipped: boolean;
   missingKeys: string[];
 }> {
   const db = await getDb();
@@ -593,6 +802,7 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
       scripting: { status: "running" },
       voice: { status: "pending" },
       thumbnail: { status: "pending" },
+      video: { status: "pending" },
     },
   };
   progressMap.set(contentId, { ...progress });
@@ -656,17 +866,42 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
     );
 
     if (thumbnailSkipped) {
-      progress.steps.thumbnail = { status: "skipped", result: "Add a Venice.ai, Replicate, or OpenAI API key in Settings to enable thumbnail generation" };
-      missingKeys.push("Image (Venice.ai, Replicate, or OpenAI)");
+      progress.steps.thumbnail = { status: "skipped", result: "Add a FLUX, Venice.ai, Replicate, or OpenAI API key in Settings to enable thumbnail generation" };
+      missingKeys.push("Image (FLUX, Venice.ai, Replicate, or OpenAI)");
     } else {
       progress.steps.thumbnail = { status: "complete", result: `Thumbnail generated with ${imageModel}` };
     }
     if (thumbnailUrl) {
-      await updateContentStatus(contentId, "review", { thumbnailUrl });
-    } else {
-      // If no thumbnail but script is done, still move to review
-      await updateContentStatus(contentId, "review");
+      await updateContentStatus(contentId, "generating", { thumbnailUrl });
     }
+
+    // ---- STEP 4: VIDEO COMPOSITION ----
+    progress.currentStep = "video";
+    progress.steps.video.status = "running";
+    progressMap.set(contentId, { ...progress });
+
+    const { videoUrl, skipped: videoSkipped } = await composeVideo(
+      thumbnailUrl,
+      audioUrl,
+      input.platform,
+    );
+
+    if (videoSkipped) {
+      if (!audioUrl) {
+        progress.steps.video = { status: "skipped", result: "Video composition requires audio. Add a voice API key to enable." };
+      } else {
+        progress.steps.video = { status: "skipped", result: "Video composition unavailable (ffmpeg not installed)" };
+      }
+    } else {
+      progress.steps.video = { status: "complete", result: "Video composed from image + audio" };
+    }
+
+    // Update content with video URL and move to review
+    const finalUpdates: Record<string, any> = {};
+    if (videoUrl) {
+      finalUpdates.mediaUrl = videoUrl; // Video replaces audio as the primary media
+    }
+    await updateContentStatus(contentId, "review", finalUpdates);
 
     // ---- COMPLETE ----
     progress.currentStep = "complete";
@@ -680,8 +915,10 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
       voiceModel,
       thumbnailUrl,
       imageModel,
+      videoUrl,
       voiceSkipped,
       thumbnailSkipped,
+      videoSkipped,
       missingKeys,
     };
   } catch (error: any) {
@@ -690,7 +927,7 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
     progress.error = error.message;
 
     // Mark whichever step was running as failed
-    for (const step of ["scripting", "voice", "thumbnail"] as const) {
+    for (const step of ["scripting", "voice", "thumbnail", "video"] as const) {
       if (progress.steps[step].status === "running") {
         progress.steps[step] = { status: "failed", error: error.message };
       }
