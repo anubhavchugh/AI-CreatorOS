@@ -18,6 +18,9 @@ COPY . .
 # Build the application
 RUN pnpm build
 
+# Generate drizzle migrations at build time
+RUN npx drizzle-kit generate
+
 # ---- Production Stage ----
 FROM node:22-slim AS runner
 
@@ -35,9 +38,13 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy built output from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy drizzle migrations
+# Copy drizzle migrations and config
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+
+# Copy startup script
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
 
 ENV NODE_ENV=production
 
@@ -45,4 +52,5 @@ ENV NODE_ENV=production
 # The server reads process.env.PORT and falls back to 3000
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+# Run migrations then start the server
+CMD ["./start.sh"]
