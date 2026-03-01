@@ -29,8 +29,8 @@ import {
   getRevenueStats,
   getRecentPayments,
 } from "./db";
-import { createCheckoutSession } from "./stripe/stripe";
-import { PLANS, type PlanKey } from "./stripe/products";
+import { createRazorpayOrder, handlePaymentVerification } from "./razorpay/razorpay";
+import { PLANS, type PlanKey } from "./razorpay/products";
 import { runContentPipeline, getProgress } from "./pipeline/contentPipeline";
 
 export const appRouter = router({
@@ -243,7 +243,7 @@ export const appRouter = router({
       }),
   }),
 
-  // ==================== STRIPE / BILLING ====================
+  // ==================== RAZORPAY / BILLING ====================
   billing: router({
     getPlans: publicProcedure.query(() => {
       return Object.entries(PLANS).map(([key, plan]) => ({
@@ -252,20 +252,35 @@ export const appRouter = router({
       }));
     }),
 
-    createCheckout: protectedProcedure
+    createOrder: protectedProcedure
       .input(z.object({
         plan: z.enum(["pro", "enterprise"]),
-        origin: z.string(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const url = await createCheckoutSession(
+        const order = await createRazorpayOrder(
           ctx.user.id,
           ctx.user.email || "",
           ctx.user.name || null,
-          input.plan as PlanKey,
-          input.origin
+          input.plan as PlanKey
         );
-        return { url };
+        return order;
+      }),
+
+    verifyPayment: protectedProcedure
+      .input(z.object({
+        orderId: z.string(),
+        paymentId: z.string(),
+        signature: z.string(),
+        plan: z.enum(["pro", "enterprise"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return handlePaymentVerification(
+          ctx.user.id,
+          input.orderId,
+          input.paymentId,
+          input.signature,
+          input.plan as PlanKey
+        );
       }),
 
     currentPlan: protectedProcedure.query(async ({ ctx }) => {

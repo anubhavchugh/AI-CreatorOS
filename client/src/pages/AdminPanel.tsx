@@ -151,13 +151,13 @@ export default function AdminPanel() {
             />
             <StatCard
               title="Total Revenue"
-              value={`$${((revenueStats?.totalRevenue || 0) / 100).toFixed(2)}`}
+              value={`₹${((revenueStats?.totalRevenue || 0) / 100).toFixed(2)}`}
               icon={DollarSign}
               subtitle={`${revenueStats?.totalPayments || 0} payments`}
             />
             <StatCard
               title="Monthly Revenue"
-              value={`$${((revenueStats?.monthlyRevenue || 0) / 100).toFixed(2)}`}
+              value={`₹${((revenueStats?.monthlyRevenue || 0) / 100).toFixed(2)}`}
               icon={TrendingUp}
               subtitle="This month"
             />
@@ -369,12 +369,12 @@ export default function AdminPanel() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <StatCard
               title="Total Revenue"
-              value={`$${((revenueStats?.totalRevenue || 0) / 100).toFixed(2)}`}
+              value={`₹${((revenueStats?.totalRevenue || 0) / 100).toFixed(2)}`}
               icon={DollarSign}
             />
             <StatCard
               title="This Month"
-              value={`$${((revenueStats?.monthlyRevenue || 0) / 100).toFixed(2)}`}
+              value={`₹${((revenueStats?.monthlyRevenue || 0) / 100).toFixed(2)}`}
               icon={TrendingUp}
             />
             <StatCard
@@ -416,7 +416,7 @@ export default function AdminPanel() {
                             </div>
                           </td>
                           <td className="py-3 px-4 font-mono font-bold">
-                            ${((p.amount || 0) / 100).toFixed(2)} {(p.currency || "usd").toUpperCase()}
+                            ₹{((p.amount || 0) / 100).toFixed(2)} {(p.currency || "INR").toUpperCase()}
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="text-xs">{p.plan}</Badge>

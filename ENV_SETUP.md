@@ -16,12 +16,12 @@ CLERK_SECRET_KEY=sk_test_xxxxx
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxxxx
 ```
 
-### Stripe Payments
-Get these from https://dashboard.stripe.com/apikeys
+### Razorpay Payments
+Get these from https://dashboard.razorpay.com → Settings → API Keys
 ```
-STRIPE_SECRET_KEY=sk_test_xxxxx
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_xxxxx
-STRIPE_WEBHOOK_SECRET=whsec_xxxxx
+RAZORPAY_KEY_ID=rzp_test_xxxxx
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 ```
 
 ### Cloudflare R2 Storage
@@ -59,3 +59,18 @@ NODE_ENV=production
 5. Set build command: `pnpm build`
 6. Set start command: `pnpm start`
 7. Deploy!
+
+## Razorpay Webhook Setup
+
+After deploying to Railway:
+1. Go to https://dashboard.razorpay.com → Settings → Webhooks
+2. Add a new webhook URL: `https://your-domain.up.railway.app/api/razorpay/webhook`
+3. Select events: `payment.captured`, `payment.failed`, `subscription.activated`, `subscription.cancelled`, `refund.processed`
+4. Copy the webhook secret and add it as `RAZORPAY_WEBHOOK_SECRET` in Railway
+
+## Clerk Webhook Setup (Optional)
+
+If you want to sync user data from Clerk:
+1. Go to https://dashboard.clerk.com → Webhooks
+2. Add endpoint: `https://your-domain.up.railway.app/api/clerk/webhook`
+3. Select events: `user.created`, `user.updated`

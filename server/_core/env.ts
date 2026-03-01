@@ -13,9 +13,10 @@ export const ENV = {
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
   s3Endpoint: process.env.S3_ENDPOINT ?? "", // Cloudflare R2 endpoint
   s3PublicUrl: process.env.S3_PUBLIC_URL ?? "", // R2 public bucket URL (e.g. https://pub-xxx.r2.dev)
-  // Stripe
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  // Razorpay
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID ?? "",
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET ?? "",
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? "",
   // Admin email (first user with this email gets admin role)
   adminEmail: process.env.ADMIN_EMAIL ?? "",
 };

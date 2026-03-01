@@ -12,19 +12,19 @@ import {
 
 /**
  * Core user table backing auth flow.
- * Self-hosted: email/password authentication with JWT sessions.
+ * Clerk handles authentication; we sync user data on first login.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).unique(), // kept for backward compat, nullable now
+  openId: varchar("openId", { length: 64 }).unique(), // kept for backward compat
   email: varchar("email", { length: 320 }).notNull().unique(),
-  passwordHash: text("passwordHash"), // bcrypt hash
+  passwordHash: text("passwordHash"), // not used with Clerk, kept for compat
   name: text("name"),
-  loginMethod: varchar("loginMethod", { length: 64 }).default("email"),
+  loginMethod: varchar("loginMethod", { length: 64 }).default("clerk"),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   plan: mysqlEnum("plan", ["free", "pro", "enterprise"]).default("free").notNull(),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  razorpayCustomerId: varchar("razorpayCustomerId", { length: 255 }),
+  razorpaySubscriptionId: varchar("razorpaySubscriptionId", { length: 255 }),
   avatarUrl: text("avatarUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -66,7 +66,7 @@ export const characters = mysqlTable("characters", {
   status: mysqlEnum("status", ["draft", "active", "paused", "archived"]).default("draft").notNull(),
   totalViews: bigint("totalViews", { mode: "number" }).default(0),
   totalSubscribers: int("totalSubscribers").default(0),
-  totalRevenue: int("totalRevenue").default(0), // stored in cents
+  totalRevenue: int("totalRevenue").default(0), // stored in paise
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -110,9 +110,9 @@ export type InsertContentItem = typeof contentItems.$inferInsert;
 export const creatorApiKeys = mysqlTable("creator_api_keys", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  service: varchar("service", { length: 100 }).notNull(), // e.g. "openai", "elevenlabs", "replicate"
-  apiKey: text("apiKey").notNull(), // encrypted in production
-  model: varchar("model", { length: 100 }), // selected model for this service
+  service: varchar("service", { length: 100 }).notNull(),
+  apiKey: text("apiKey").notNull(),
+  model: varchar("model", { length: 100 }),
   isActive: boolean("isActive").default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -127,7 +127,7 @@ export type InsertCreatorApiKey = typeof creatorApiKeys.$inferInsert;
 export const platformConnections = mysqlTable("platform_connections", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  platform: varchar("platform", { length: 50 }).notNull(), // "youtube", "tiktok", "instagram"
+  platform: varchar("platform", { length: 50 }).notNull(),
   apiKey: text("apiKey"),
   accessToken: text("accessToken"),
   refreshToken: text("refreshToken"),
@@ -147,9 +147,11 @@ export type InsertPlatformConnection = typeof platformConnections.$inferInsert;
 export const payments = mysqlTable("payments", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  stripePaymentId: varchar("stripePaymentId", { length: 255 }),
-  amount: int("amount").notNull(), // in cents
-  currency: varchar("currency", { length: 10 }).default("usd"),
+  razorpayPaymentId: varchar("razorpayPaymentId", { length: 255 }),
+  razorpayOrderId: varchar("razorpayOrderId", { length: 255 }),
+  razorpaySubscriptionId: varchar("razorpaySubscriptionId", { length: 255 }),
+  amount: int("amount").notNull(), // in paise (INR subunits)
+  currency: varchar("currency", { length: 10 }).default("INR"),
   plan: mysqlEnum("plan", ["free", "pro", "enterprise"]).notNull(),
   status: mysqlEnum("status", ["succeeded", "pending", "failed", "refunded"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

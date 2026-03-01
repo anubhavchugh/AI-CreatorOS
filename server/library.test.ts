@@ -10,11 +10,12 @@ function createAuthContext(userId = 1): TrpcContext {
     openId: "test-user-" + userId,
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    loginMethod: "clerk",
     role: "user",
     plan: "free",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    razorpayCustomerId: null,
+    razorpaySubscriptionId: null,
+    passwordHash: null,
     avatarUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -158,9 +159,10 @@ vi.mock("./db", () => ({
   getRecentPayments: vi.fn().mockResolvedValue([]),
 }));
 
-// Mock stripe module
-vi.mock("./stripe/stripe", () => ({
-  createCheckoutSession: vi.fn(),
+// Mock razorpay module
+vi.mock("./razorpay/razorpay", () => ({
+  createRazorpayOrder: vi.fn(),
+  handlePaymentVerification: vi.fn(),
 }));
 
 // Mock pipeline module

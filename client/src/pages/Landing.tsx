@@ -53,7 +53,7 @@ const pricingPlans = [
   {
     key: "free",
     name: "Free",
-    price: "$0",
+    price: "₹0",
     interval: "forever",
     description: "Get started with AI content creation",
     features: [
@@ -69,7 +69,7 @@ const pricingPlans = [
   {
     key: "pro",
     name: "Pro",
-    price: "$29",
+    price: "₹2,499",
     interval: "/month",
     description: "Scale your AI content empire",
     features: [
@@ -88,7 +88,7 @@ const pricingPlans = [
   {
     key: "enterprise",
     name: "Enterprise",
-    price: "$99",
+    price: "₹7,999",
     interval: "/month",
     description: "For agencies and studios",
     features: [
@@ -128,15 +128,46 @@ export default function Landing() {
     },
   });
 
-  const createCheckout = trpc.billing.createCheckout.useMutation({
+  const createOrder = trpc.billing.createOrder.useMutation({
     onSuccess: (data) => {
-      toast.info("Redirecting to checkout...");
-      window.open(data.url, "_blank");
+      // Open Razorpay checkout
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: "AI CreatorOS",
+        description: `Upgrade to ${pendingPlan} plan`,
+        order_id: data.orderId,
+        handler: function (response: any) {
+          // Verify payment on server
+          verifyPayment.mutate({
+            orderId: response.razorpay_order_id,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+            plan: pendingPlan as "pro" | "enterprise",
+          });
+        },
+        theme: { color: "#6366f1" },
+      };
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
     },
     onError: () => {
-      toast.error("Failed to start checkout. Please try again.");
+      toast.error("Failed to create order. Please try again.");
     },
   });
+
+  const verifyPayment = trpc.billing.verifyPayment.useMutation({
+    onSuccess: () => {
+      toast.success("Payment successful! Your plan has been upgraded.");
+      navigate("/dashboard");
+    },
+    onError: () => {
+      toast.error("Payment verification failed. Please contact support.");
+    },
+  });
+
+  const [pendingPlan, setPendingPlan] = useState("");
 
   const handleWaitlist = () => {
     if (!email || !email.includes("@")) {
@@ -154,9 +185,9 @@ export default function Landing() {
     if (planKey === "free") {
       navigate("/dashboard");
     } else {
-      createCheckout.mutate({
+      setPendingPlan(planKey);
+      createOrder.mutate({
         plan: planKey as "pro" | "enterprise",
-        origin: window.location.origin,
       });
     }
   };
@@ -431,7 +462,7 @@ export default function Landing() {
 
                     <Button
                       onClick={() => handlePricingCta(plan.key)}
-                      disabled={createCheckout.isPending}
+                      disabled={createOrder.isPending || verifyPayment.isPending}
                       className={`mt-8 w-full ${
                         plan.popular ? "" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                       }`}

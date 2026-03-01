@@ -87,4 +87,21 @@
 - [x] Fix all TypeScript errors (0 errors)
 - [x] Update vitest tests (59 tests passing)
 - [x] Verify build succeeds
-- [ ] Export to GitHub (anubhavchugh/AI-CreatorOS)
+- [x] Export to GitHub (anubhavchugh/AI-CreatorOS)
+
+## Phase 11: Razorpay Migration, UAT Branch, Clerk & R2 Setup Guides
+- [x] Create UAT branch in GitHub
+- [x] Replace Stripe SDK with Razorpay SDK (backend)
+- [x] Razorpay order creation endpoint
+- [x] Razorpay webhook handler (payment.captured, subscription.activated, etc.)
+- [x] Razorpay subscription plans (Free ₹0 / Pro ₹2,499 / Enterprise ₹7,999)
+- [x] Replace Stripe frontend checkout with Razorpay checkout.js
+- [x] Update billing/pricing page for Razorpay (INR)
+- [x] Update admin revenue dashboard for Razorpay (INR)
+- [x] Remove Stripe dependencies and env vars
+- [x] Update env config for Razorpay (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET)
+- [x] Update vitest tests for Razorpay (60 tests passing)
+- [x] Verify build succeeds
+- [x] Provide Clerk setup guide
+- [x] Provide Cloudflare R2 setup guide
+- [ ] Push to GitHub (main + uat branches)

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import { PLANS } from "./stripe/products";
+import { PLANS } from "./razorpay/products";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -41,9 +41,15 @@ vi.mock("./db", () => ({
   getRecentPayments: vi.fn().mockResolvedValue([]),
 }));
 
-// Mock stripe
-vi.mock("./stripe/stripe", () => ({
-  createCheckoutSession: vi.fn().mockResolvedValue("https://checkout.stripe.com/test"),
+// Mock razorpay
+vi.mock("./razorpay/razorpay", () => ({
+  createRazorpayOrder: vi.fn().mockResolvedValue({
+    orderId: "order_test_123",
+    amount: 249900,
+    currency: "INR",
+    keyId: "rzp_test_key",
+  }),
+  handlePaymentVerification: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 function createUserContext(overrides: Partial<AuthenticatedUser> = {}): TrpcContext {
@@ -52,15 +58,16 @@ function createUserContext(overrides: Partial<AuthenticatedUser> = {}): TrpcCont
     openId: "test-user-123",
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    loginMethod: "clerk",
     role: "user",
     plan: "free",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    razorpayCustomerId: null,
+    razorpaySubscriptionId: null,
     avatarUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
+    passwordHash: null,
     ...overrides,
   };
 
@@ -271,7 +278,7 @@ describe("settings", () => {
   });
 });
 
-// ==================== BILLING ====================
+// ==================== BILLING (RAZORPAY) ====================
 describe("billing", () => {
   it("returns all plans", async () => {
     const ctx = createPublicContext();
@@ -284,24 +291,36 @@ describe("billing", () => {
     expect(planKeys).toContain("enterprise");
   });
 
-  it("returns correct plan pricing", async () => {
+  it("returns correct plan pricing in INR paise", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
     const result = await caller.billing.getPlans();
     const pro = result.find((p) => p.key === "pro");
-    expect(pro?.price).toBe(2900);
+    expect(pro?.price).toBe(249900); // ₹2,499 in paise
     const enterprise = result.find((p) => p.key === "enterprise");
-    expect(enterprise?.price).toBe(9900);
+    expect(enterprise?.price).toBe(799900); // ₹7,999 in paise
   });
 
-  it("creates a checkout session for pro plan", async () => {
+  it("creates a Razorpay order for pro plan", async () => {
     const ctx = createUserContext();
     const caller = appRouter.createCaller(ctx);
-    const result = await caller.billing.createCheckout({
+    const result = await caller.billing.createOrder({ plan: "pro" });
+    expect(result.orderId).toBe("order_test_123");
+    expect(result.amount).toBe(249900);
+    expect(result.currency).toBe("INR");
+    expect(result.keyId).toBe("rzp_test_key");
+  });
+
+  it("verifies a Razorpay payment", async () => {
+    const ctx = createUserContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.billing.verifyPayment({
+      orderId: "order_test_123",
+      paymentId: "pay_test_456",
+      signature: "test_signature",
       plan: "pro",
-      origin: "https://test.example.com",
     });
-    expect(result.url).toBe("https://checkout.stripe.com/test");
+    expect(result).toEqual({ success: true });
   });
 
   it("returns current plan for user", async () => {
@@ -375,8 +394,8 @@ describe("admin", () => {
 describe("products", () => {
   it("has correct plan structure", () => {
     expect(PLANS.free.price).toBe(0);
-    expect(PLANS.pro.price).toBe(2900);
-    expect(PLANS.enterprise.price).toBe(9900);
+    expect(PLANS.pro.price).toBe(249900); // ₹2,499 in paise
+    expect(PLANS.enterprise.price).toBe(799900); // ₹7,999 in paise
   });
 
   it("has features for all plans", () => {

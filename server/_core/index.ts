@@ -7,7 +7,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { registerStripeWebhook } from "../stripe/stripe";
+import { registerRazorpayWebhook } from "../razorpay/razorpay";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -32,9 +32,9 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  // Stripe webhook needs raw body BEFORE json parsing
-  app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
-  registerStripeWebhook(app);
+  // Razorpay webhook needs raw body BEFORE json parsing
+  app.use("/api/razorpay/webhook", express.raw({ type: "application/json" }));
+  registerRazorpayWebhook(app);
 
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));

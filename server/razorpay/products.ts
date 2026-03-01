@@ -1,6 +1,7 @@
 /**
  * AI CreatorOS — Pricing Plans
- * Centralized product/price definitions for Stripe integration
+ * Centralized product/price definitions for Razorpay integration
+ * Amounts are in paise (INR subunits). 100 paise = ₹1
  */
 
 export const PLANS = {
@@ -8,7 +9,8 @@ export const PLANS = {
     name: "Free",
     description: "Get started with AI content creation",
     price: 0,
-    priceId: null, // No Stripe price for free tier
+    priceDisplay: "₹0",
+    currency: "INR",
     features: [
       "1 AI Character",
       "10 content pieces/month",
@@ -25,9 +27,11 @@ export const PLANS = {
   pro: {
     name: "Pro",
     description: "Scale your AI content empire",
-    price: 2900, // $29/month in cents
-    priceDisplay: "$29",
-    interval: "month" as const,
+    price: 249900, // ₹2,499/month in paise
+    priceDisplay: "₹2,499",
+    currency: "INR",
+    interval: "monthly" as const,
+    period: 1,
     features: [
       "10 AI Characters",
       "Unlimited content",
@@ -47,9 +51,11 @@ export const PLANS = {
   enterprise: {
     name: "Enterprise",
     description: "For agencies and studios",
-    price: 9900, // $99/month in cents
-    priceDisplay: "$99",
-    interval: "month" as const,
+    price: 799900, // ₹7,999/month in paise
+    priceDisplay: "₹7,999",
+    currency: "INR",
+    interval: "monthly" as const,
+    period: 1,
     features: [
       "Unlimited AI Characters",
       "Unlimited content",
