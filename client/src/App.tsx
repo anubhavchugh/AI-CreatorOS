@@ -62,8 +62,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
-      <Route path="/sign-in" component={ClerkSignInPage} />
-      <Route path="/sign-up" component={ClerkSignUpPage} />
+      <Route path="/sign-in" nest component={ClerkSignInPage} />
+      <Route path="/sign-up" nest component={ClerkSignUpPage} />
       <Route path="/dashboard" nest component={DashboardRouter} />
       <Route path="/characters" component={DashboardRouter} />
       <Route path="/characters/new" component={DashboardRouter} />
