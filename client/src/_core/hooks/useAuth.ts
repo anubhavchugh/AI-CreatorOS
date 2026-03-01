@@ -33,7 +33,7 @@ export function useAuth() {
     loading,
     error: meQuery.error ?? null,
     isAuthenticated: !!isSignedIn && !!user,
-    logout: () => signOut(),
+    logout: () => signOut({ redirectUrl: "/" }),
     refresh: () => meQuery.refetch(),
   };
 }

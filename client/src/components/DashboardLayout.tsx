@@ -3,7 +3,7 @@
  * Design: Collapsible sidebar, dark-first, electric blue accents, glass-morphism cards
  * Font: DM Sans (body) + JetBrains Mono (metrics)
  */
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "@/contexts/ThemeContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -52,7 +52,33 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, loading, isAuthenticated, logout } = useAuth();
+
+  // Redirect to sign-in if not authenticated (after loading completes)
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate("/sign-in");
+    }
+  }, [loading, isAuthenticated, navigate]);
+
+  // Show loading skeleton while checking auth
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-primary/20 animate-pulse flex items-center justify-center">
+            <Zap className="w-5 h-5 text-primary" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render dashboard if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

@@ -45,7 +45,7 @@ const trpcClient = trpc.createClient({
 });
 
 createRoot(document.getElementById("root")!).render(
-  <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY || ""}>
+  <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY || ""} afterSignOutUrl="/">
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <App />

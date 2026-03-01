@@ -194,3 +194,10 @@
 - [x] Full end-to-end pipeline test (character creation with avatar → content generation → library)
 - [x] Display character avatars in Characters page and Generate Content page
 - [ ] Update vitest tests
+
+## Phase 22: Logout Button & Redirect Fix
+- [x] Ensure logout button is visible and working in sidebar
+- [x] After logout, redirect to landing page (/) or login page
+- [x] Add auth guard to DashboardLayout (redirect to /sign-in if not authenticated)
+- [ ] Push changes to GitHub (main + uat branches)
+- [ ] Guide Railway deployment
