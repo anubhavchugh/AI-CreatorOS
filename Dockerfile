@@ -18,8 +18,8 @@ COPY . .
 # Build the application
 RUN pnpm build
 
-# Generate drizzle migrations at build time
-RUN npx drizzle-kit generate
+# Migration SQL files are already committed in drizzle/ folder
+# drizzle-kit migrate runs at runtime via start.sh (needs DATABASE_URL)
 
 # ---- Production Stage ----
 FROM node:22-slim AS runner
@@ -38,7 +38,7 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy built output from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy drizzle migrations and config
+# Copy drizzle migrations and config (needed for runtime migration)
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
