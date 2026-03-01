@@ -1,18 +1,18 @@
 /*
  * Content Pipeline — End-to-end content creation workflow
- * Design: Kanban-style columns showing pipeline stages
+ * Shows real content items from DB + link to Generate Content page
  */
 import { motion } from "framer-motion";
-import { Plus, Play, Pause, RotateCcw, CheckCircle2, Clock, Wand2, Mic, Film, Upload } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
+import {
+  Plus, Play, Pause, RotateCcw, CheckCircle2, Clock, Wand2, Mic,
+  Film, Upload, Sparkles, ArrowRight, Loader2, FileText, Eye
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-
-const CHAR1 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663355511618/VYneUcnZvTL9FVkbHuDg6r/ai-character-1-6dhCsgGqumtaZH6c7azPzf.webp";
-const CHAR2 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663355511618/VYneUcnZvTL9FVkbHuDg6r/ai-character-2-24x8c4CYv6kSDiNcWZCSor.webp";
-const CHAR3 = "https://d2xsxph8kpxj0f.cloudfront.net/310519663355511618/VYneUcnZvTL9FVkbHuDg6r/ai-character-3-DryEzWBDVzwnVw7HcPDear.webp";
 
 const stagger = {
   hidden: { opacity: 0 },
@@ -23,59 +23,37 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-const columns = [
-  {
-    id: "scripting",
-    title: "Scripting",
-    icon: Wand2,
-    color: "text-warning",
-    bgColor: "bg-warning/10",
-    items: [
-      { id: 1, title: "AI News Weekly #24", character: "Nova", avatar: CHAR1, platform: "YouTube", duration: "8:00", progress: 60 },
-      { id: 2, title: "Street Food Reaction", character: "Kai", avatar: CHAR2, platform: "TikTok", duration: "0:45", progress: 20 },
-    ],
-  },
-  {
-    id: "voice",
-    title: "Voice Generation",
-    icon: Mic,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-    items: [
-      { id: 3, title: "Morning Meditation #12", character: "Aura", avatar: CHAR3, platform: "YouTube", duration: "15:00", progress: 45 },
-    ],
-  },
-  {
-    id: "rendering",
-    title: "Video Rendering",
-    icon: Film,
-    color: "text-primary",
-    bgColor: "bg-primary/10",
-    items: [
-      { id: 4, title: "Tech Review: iPhone 18", character: "Nova", avatar: CHAR1, platform: "YouTube", duration: "12:30", progress: 72 },
-      { id: 5, title: "Dance Challenge #47", character: "Kai", avatar: CHAR2, platform: "TikTok", duration: "0:30", progress: 88 },
-    ],
-  },
-  {
-    id: "review",
-    title: "Ready for Review",
-    icon: CheckCircle2,
-    color: "text-success",
-    bgColor: "bg-success/10",
-    items: [
-      { id: 6, title: "Morning Routine ASMR", character: "Aura", avatar: CHAR3, platform: "Instagram", duration: "1:00", progress: 100 },
-      { id: 7, title: "Unboxing Galaxy S30", character: "Nova", avatar: CHAR1, platform: "YouTube", duration: "10:15", progress: 100 },
-    ],
-  },
-];
-
-const recentPublished = [
-  { title: "AI Explained in 60s", character: "Nova", platform: "TikTok", views: "1.2M", published: "2h ago" },
-  { title: "Chill Beats Live", character: "Aura", platform: "YouTube", views: "45K", published: "5h ago" },
-  { title: "Prank Compilation #8", character: "Kai", platform: "YouTube", views: "890K", published: "1d ago" },
-];
+const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
+  idea: { label: "Idea", color: "text-muted-foreground", bgColor: "bg-muted/30", icon: FileText },
+  scripting: { label: "Scripting", color: "text-amber-500", bgColor: "bg-amber-500/10", icon: Wand2 },
+  generating: { label: "Generating", color: "text-primary", bgColor: "bg-primary/10", icon: Loader2 },
+  review: { label: "Review", color: "text-blue-400", bgColor: "bg-blue-400/10", icon: Eye },
+  scheduled: { label: "Scheduled", color: "text-purple-400", bgColor: "bg-purple-400/10", icon: Clock },
+  published: { label: "Published", color: "text-emerald-500", bgColor: "bg-emerald-500/10", icon: CheckCircle2 },
+  failed: { label: "Failed", color: "text-red-500", bgColor: "bg-red-500/10", icon: RotateCcw },
+};
 
 export default function ContentPipeline() {
+  const [, navigate] = useLocation();
+  const { data: contentItems, isLoading } = trpc.content.list.useQuery();
+  const { data: characters } = trpc.characters.list.useQuery();
+
+  // Group content by status for kanban view
+  const grouped = {
+    scripting: contentItems?.filter((c: any) => c.status === "scripting" || c.status === "idea") || [],
+    generating: contentItems?.filter((c: any) => c.status === "generating") || [],
+    review: contentItems?.filter((c: any) => c.status === "review") || [],
+    published: contentItems?.filter((c: any) => c.status === "published" || c.status === "scheduled") || [],
+  };
+
+  const getCharacterName = (charId: number) => {
+    const char = characters?.find((c: any) => c.id === charId);
+    return char?.name || "Unknown";
+  };
+
+  const totalInPipeline = contentItems?.filter((c: any) => !["published", "failed"].includes(c.status)).length || 0;
+  const totalPublished = contentItems?.filter((c: any) => c.status === "published").length || 0;
+
   return (
     <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-8">
       {/* Header */}
@@ -85,13 +63,13 @@ export default function ContentPipeline() {
           <p className="text-muted-foreground mt-1">Track content from idea to publication.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => toast("Batch generation coming soon!")}>
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Regenerate All
-          </Button>
-          <Button onClick={() => toast("New content wizard coming soon!")} className="gap-2">
-            <Plus className="w-4 h-4" />
-            New Content
+          <Button
+            onClick={() => navigate("/generate")}
+            className="gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            Generate Content
+            <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       </motion.div>
@@ -99,10 +77,10 @@ export default function ContentPipeline() {
       {/* Pipeline Stats */}
       <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "In Pipeline", value: "7", icon: Clock, color: "text-primary" },
-          { label: "Rendering", value: "2", icon: Film, color: "text-warning" },
-          { label: "Ready", value: "2", icon: CheckCircle2, color: "text-success" },
-          { label: "Published Today", value: "3", icon: Upload, color: "text-primary" },
+          { label: "In Pipeline", value: String(totalInPipeline), icon: Clock, color: "text-primary" },
+          { label: "Generating", value: String(grouped.generating.length), icon: Film, color: "text-amber-500" },
+          { label: "Ready for Review", value: String(grouped.review.length), icon: CheckCircle2, color: "text-blue-400" },
+          { label: "Published", value: String(totalPublished), icon: Upload, color: "text-emerald-500" },
         ].map((s) => {
           const Icon = s.icon;
           return (
@@ -121,82 +99,104 @@ export default function ContentPipeline() {
         })}
       </motion.div>
 
-      {/* Kanban Columns */}
-      <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {columns.map((col) => {
-          const ColIcon = col.icon;
-          return (
-            <div key={col.id} className="space-y-3">
-              <div className="flex items-center gap-2 px-1">
-                <ColIcon className={`w-4 h-4 ${col.color}`} />
-                <h3 className="text-sm font-semibold">{col.title}</h3>
-                <Badge variant="secondary" className="text-xs ml-auto">
-                  {col.items.length}
-                </Badge>
+      {/* Empty State / CTA */}
+      {!isLoading && (!contentItems || contentItems.length === 0) && (
+        <motion.div variants={fadeUp}>
+          <Card className="border-border/50 border-dashed">
+            <CardContent className="p-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Sparkles className="w-8 h-8 text-primary" />
               </div>
-              <div className="space-y-2">
-                {col.items.map((item) => (
-                  <Card
-                    key={item.id}
-                    className="border-border/50 hover:border-primary/30 transition-all duration-200 dark:hover:glow-blue-sm cursor-pointer"
-                    onClick={() => toast("Content detail view coming soon!")}
-                  >
-                    <CardContent className="p-3 space-y-3">
-                      <div className="flex items-start gap-2">
-                        <img src={item.avatar} alt={item.character} className="w-8 h-8 rounded-lg object-cover" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.title}</p>
-                          <p className="text-xs text-muted-foreground">{item.character} · {item.platform}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={item.progress} className="h-1.5 flex-1" />
-                        <span className="text-xs font-mono text-muted-foreground">{item.progress}%</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{item.duration}</span>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={(e) => { e.stopPropagation(); toast("Playback coming soon!"); }}>
-                            <Play className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={(e) => { e.stopPropagation(); toast("Pause coming soon!"); }}>
-                            <Pause className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </motion.div>
+              <h3 className="text-lg font-semibold mb-2">No content yet</h3>
+              <p className="text-muted-foreground text-sm max-w-md mx-auto mb-6">
+                Start generating content for your AI characters. The pipeline will show your content
+                moving through each stage — from script to voice to final output.
+              </p>
+              <Button onClick={() => navigate("/generate")} className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                Generate Your First Content
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
-      {/* Recently Published */}
-      <motion.div variants={fadeUp}>
-        <Card className="border-border/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Recently Published</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentPublished.map((item) => (
-                <div key={item.title} className="flex items-center justify-between p-3 rounded-xl bg-accent/30 hover:bg-accent/50 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.character} · {item.platform}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-mono font-semibold">{item.views}</p>
-                    <p className="text-xs text-muted-foreground">{item.published}</p>
-                  </div>
+      {/* Loading */}
+      {isLoading && (
+        <motion.div variants={fadeUp} className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Loading pipeline...</span>
+        </motion.div>
+      )}
+
+      {/* Kanban Columns */}
+      {contentItems && contentItems.length > 0 && (
+        <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[
+            { id: "scripting", title: "Scripting / Ideas", icon: Wand2, color: "text-amber-500", items: grouped.scripting },
+            { id: "generating", title: "Generating", icon: Mic, color: "text-primary", items: grouped.generating },
+            { id: "review", title: "Ready for Review", icon: Eye, color: "text-blue-400", items: grouped.review },
+            { id: "published", title: "Published / Scheduled", icon: CheckCircle2, color: "text-emerald-500", items: grouped.published },
+          ].map((col) => {
+            const ColIcon = col.icon;
+            return (
+              <div key={col.id} className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <ColIcon className={`w-4 h-4 ${col.color}`} />
+                  <h3 className="text-sm font-semibold">{col.title}</h3>
+                  <Badge variant="secondary" className="text-xs ml-auto">
+                    {col.items.length}
+                  </Badge>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+                <div className="space-y-2 min-h-[100px]">
+                  {col.items.length === 0 && (
+                    <div className="p-4 rounded-xl border border-dashed border-border/50 text-center">
+                      <p className="text-xs text-muted-foreground">No items</p>
+                    </div>
+                  )}
+                  {col.items.map((item: any) => {
+                    const config = statusConfig[item.status] || statusConfig.idea;
+                    return (
+                      <Card
+                        key={item.id}
+                        className="border-border/50 hover:border-primary/30 transition-all duration-200 cursor-pointer"
+                        onClick={() => toast("Content detail view coming soon!")}
+                      >
+                        <CardContent className="p-3 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-xs font-bold shrink-0">
+                              {getCharacterName(item.characterId).charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {getCharacterName(item.characterId)} · {item.platform || "—"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline" className={`text-[10px] ${config.color}`}>
+                              {config.label}
+                            </Badge>
+                            {item.type && (
+                              <span className="text-[10px] text-muted-foreground capitalize">{item.type.replace("_", " ")}</span>
+                            )}
+                          </div>
+                          {item.script && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                              {item.script.substring(0, 100)}...
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </motion.div>
+      )}
     </motion.div>
   );
 }

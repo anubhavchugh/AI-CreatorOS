@@ -34,4 +34,16 @@
 ## Phase 6: Test & Deliver
 - [x] Write vitest tests for all tRPC procedures (33 tests passing)
 - [x] Test all pages render correctly (verified via browser)
-- [ ] Save checkpoint and deliver
+- [x] Save checkpoint and deliver
+
+## Phase 7: Content Generation Pipeline (End-to-End)
+- [x] Build server-side pipeline orchestrator (script → voice → image → video)
+- [x] Integrate OpenAI/Claude/Gemini API for script generation (using creator's API key)
+- [x] Integrate ElevenLabs/PlayHT API for voice generation (using creator's API key)
+- [x] Integrate Replicate/fal.ai/DALL-E for thumbnails (using creator's API key)
+- [x] Build content generation UI with step-by-step progress tracking
+- [x] Connect pipeline to Content Pipeline page with real-time status updates
+- [x] Add "Generate Content" action from Character cards + sidebar nav
+- [x] Update content items in database with generated assets
+- [x] Write vitest tests for pipeline procedures (14 tests, 47 total)
+- [x] Save checkpoint and deliver

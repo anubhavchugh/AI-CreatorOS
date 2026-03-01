@@ -29,6 +29,7 @@ import {
 } from "./db";
 import { createCheckoutSession } from "./stripe/stripe";
 import { PLANS, type PlanKey } from "./stripe/products";
+import { runContentPipeline, getProgress } from "./pipeline/contentPipeline";
 
 export const appRouter = router({
   system: systemRouter,
@@ -273,6 +274,46 @@ export const appRouter = router({
         limits: PLANS[(ctx.user.plan || "free") as PlanKey]?.limits || {},
       };
     }),
+  }),
+
+  // ==================== CONTENT PIPELINE ====================
+  pipeline: router({
+    generate: protectedProcedure
+      .input(z.object({
+        characterId: z.number(),
+        topic: z.string().min(1),
+        contentType: z.enum(["short", "long_form", "image", "story", "reel"]).default("short"),
+        platform: z.string().default("youtube"),
+        tone: z.string().optional(),
+        duration: z.string().optional(),
+        additionalInstructions: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Verify character belongs to user
+        const character = await getCharacterById(input.characterId);
+        if (!character || character.userId !== ctx.user.id) {
+          throw new Error("Character not found");
+        }
+
+        const result = await runContentPipeline({
+          characterId: input.characterId,
+          userId: ctx.user.id,
+          topic: input.topic,
+          contentType: input.contentType,
+          platform: input.platform,
+          tone: input.tone,
+          duration: input.duration,
+          additionalInstructions: input.additionalInstructions,
+        });
+
+        return result;
+      }),
+
+    progress: protectedProcedure
+      .input(z.object({ contentId: z.number() }))
+      .query(async ({ input }) => {
+        return getProgress(input.contentId) || null;
+      }),
   }),
 
   // ==================== ADMIN ====================

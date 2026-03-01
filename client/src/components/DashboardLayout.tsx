@@ -22,6 +22,7 @@ import {
   Moon,
   Zap,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/characters", label: "Characters", icon: Users },
   { path: "/pipeline", label: "Content Pipeline", icon: Clapperboard },
+  { path: "/generate", label: "Generate Content", icon: Sparkles },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/analytics", label: "Analytics", icon: BarChart3 },
   { path: "/monetization", label: "Monetization", icon: DollarSign },
