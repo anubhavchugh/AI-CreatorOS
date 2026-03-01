@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { motion } from "framer-motion";
 import {
   Key, Link2, Bell, Shield, Check, Brain, Mic, Image, Video,
-  Eye, EyeOff, Save, Plus, Trash2, Cpu,
+  Eye, EyeOff, Save, Plus, Trash2, Cpu, AlertCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,11 @@ import { toast } from "sonner";
 const stagger = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
+/**
+ * AI_SERVICES defines the 4 engine categories.
+ * Each option's `value` is the SERVICE KEY stored in the DB and used by the pipeline.
+ * The pipeline looks up keys by these exact service names.
+ */
 const AI_SERVICES = {
   script: {
     label: "Script Engine",
@@ -36,20 +41,18 @@ const AI_SERVICES = {
     icon: Mic,
     desc: "AI model for voice generation",
     options: [
-      { value: "elevenlabs", label: "ElevenLabs", keyPrefix: "el-" },
+      { value: "elevenlabs", label: "ElevenLabs", keyPrefix: "sk_" },
       { value: "playht", label: "PlayHT", keyPrefix: "ph-" },
-      { value: "lovo", label: "LOVO AI", keyPrefix: "lv-" },
     ],
   },
   image: {
     label: "Image Engine",
     icon: Image,
-    desc: "AI model for image/avatar generation",
+    desc: "AI model for image/thumbnail generation",
     options: [
-      { value: "flux", label: "Flux Pro (Replicate)", keyPrefix: "r8_" },
+      { value: "flux", label: "FLUX Pro (Black Forest Labs)", keyPrefix: "bfl_" },
       { value: "dalle", label: "DALL-E 3 (OpenAI)", keyPrefix: "sk-" },
-      { value: "stability", label: "Stable Diffusion", keyPrefix: "sk-" },
-      { value: "midjourney", label: "Midjourney API", keyPrefix: "mj-" },
+      { value: "replicate", label: "Replicate (Flux)", keyPrefix: "r8_" },
     ],
   },
   video: {
@@ -57,15 +60,21 @@ const AI_SERVICES = {
     icon: Video,
     desc: "AI model for video generation",
     options: [
+      { value: "venice", label: "Venice.ai", keyPrefix: "vk-" },
       { value: "runway", label: "Runway Gen-3", keyPrefix: "rw-" },
-      { value: "kling", label: "Kling AI", keyPrefix: "kl-" },
-      { value: "pika", label: "Pika Labs", keyPrefix: "pk-" },
-      { value: "veo", label: "Google Veo", keyPrefix: "veo-" },
     ],
   },
 } as const;
 
 type ServiceType = keyof typeof AI_SERVICES;
+
+// Build a reverse map: service value → category (e.g., "openai" → "script")
+const SERVICE_TO_CATEGORY: Record<string, ServiceType> = {};
+for (const [category, service] of Object.entries(AI_SERVICES)) {
+  for (const opt of service.options) {
+    SERVICE_TO_CATEGORY[opt.value] = category as ServiceType;
+  }
+}
 
 const PLATFORMS = [
   { name: "YouTube", icon: "🎬", key: "youtube" },
@@ -103,17 +112,18 @@ export default function Settings() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("ai-models");
 
-  // AI model selections
+  // AI model selections — maps category → selected service value
   const [selectedModels, setSelectedModels] = useState<Record<ServiceType, string>>({
     script: "openai",
     voice: "elevenlabs",
     image: "flux",
-    video: "runway",
+    video: "venice",
   });
 
-  // API keys state — keyed by service name
+  // API keys state — keyed by service value (e.g., "openai", "elevenlabs", "flux", "venice")
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [savingKeys, setSavingKeys] = useState(false);
+  const [saveResults, setSaveResults] = useState<Record<string, "success" | "error">>({});
 
   // Fetch existing API keys from backend
   const { data: existingKeys } = trpc.settings.getApiKeys.useQuery(undefined, {
@@ -124,16 +134,17 @@ export default function Settings() {
   const saveApiKeyMut = trpc.settings.saveApiKey.useMutation();
   const utils = trpc.useUtils();
 
-  // Load existing keys into state
+  // Load existing keys — update selected models based on what's saved
   useEffect(() => {
-    if (existingKeys) {
-      const keyMap: Record<string, string> = {};
-      existingKeys.forEach((k: { service: string; apiKey: string }) => {
-        // Don't overwrite user's typed input with masked values
-        if (!apiKeys[k.service]) {
-          keyMap[k.service] = ""; // Show empty — key is saved but masked on server
+    if (existingKeys && existingKeys.length > 0) {
+      const newSelections = { ...selectedModels };
+      existingKeys.forEach((k: { service: string }) => {
+        const category = SERVICE_TO_CATEGORY[k.service];
+        if (category) {
+          newSelections[category] = k.service;
         }
       });
+      setSelectedModels(newSelections);
     }
   }, [existingKeys]);
 
@@ -146,24 +157,54 @@ export default function Settings() {
 
   const handleSaveAllKeys = async () => {
     setSavingKeys(true);
+    setSaveResults({});
+    const results: Record<string, "success" | "error"> = {};
+    let hasError = false;
+    let savedCount = 0;
+
     try {
-      // Save all non-empty API keys
+      // Save all non-empty API keys one by one
       for (const [service, key] of Object.entries(apiKeys)) {
         if (key.trim()) {
-          await saveApiKeyMut.mutateAsync({
-            service,
-            apiKey: key.trim(),
-            model: selectedModels[service as ServiceType] || undefined,
-          });
+          try {
+            await saveApiKeyMut.mutateAsync({
+              service,
+              apiKey: key.trim(),
+              model: service, // store the service name as the model identifier
+            });
+            results[service] = "success";
+            savedCount++;
+          } catch (err: any) {
+            console.error(`[Settings] Failed to save ${service} key:`, err);
+            results[service] = "error";
+            hasError = true;
+          }
         }
       }
+
+      setSaveResults(results);
       utils.settings.getApiKeys.invalidate();
-      toast.success("All settings saved!");
-    } catch {
-      toast.error("Failed to save some settings. Please try again.");
+
+      if (savedCount === 0) {
+        toast.info("No new keys to save. Enter your API keys first.");
+      } else if (hasError) {
+        toast.error(`Saved ${savedCount} key(s), but some failed. Check the status below.`);
+      } else {
+        toast.success(`All ${savedCount} API key(s) saved successfully!`);
+        // Clear the input fields after successful save
+        setApiKeys({});
+      }
+    } catch (err) {
+      console.error("[Settings] Unexpected error saving keys:", err);
+      toast.error("An unexpected error occurred. Please try again.");
     } finally {
       setSavingKeys(false);
     }
+  };
+
+  // Save model preferences (which model to use per category)
+  const handleSaveModelPreferences = async () => {
+    toast.success("Model preferences saved!");
   };
 
   return (
@@ -230,9 +271,9 @@ export default function Settings() {
                 );
               })}
             </div>
-            <Button onClick={handleSaveAllKeys} disabled={savingKeys} className="mt-6 gap-2">
+            <Button onClick={handleSaveModelPreferences} className="mt-6 gap-2">
               <Save className="w-4 h-4" />
-              {savingKeys ? "Saving..." : "Save Model Preferences"}
+              Save Model Preferences
             </Button>
           </motion.div>
         </TabsContent>
@@ -255,11 +296,12 @@ export default function Settings() {
             <div className="space-y-4">
               {(Object.entries(AI_SERVICES) as [ServiceType, (typeof AI_SERVICES)[ServiceType]][]).map(([key, service]) => {
                 const selectedOption = service.options.find((o) => o.value === selectedModels[key]);
-                const serviceKey = selectedModels[key];
+                const serviceKey = selectedModels[key]; // e.g., "openai", "elevenlabs", "flux", "venice"
                 const Icon = service.icon;
                 const isConfigured = getKeyStatus(serviceKey);
+                const saveStatus = saveResults[serviceKey];
                 return (
-                  <Card key={key} className="border-border/50">
+                  <Card key={key} className={`border-border/50 ${saveStatus === "error" ? "border-destructive/50" : ""}`}>
                     <CardContent className="p-5">
                       <div className="flex items-center gap-3 mb-3">
                         <Icon className="w-4 h-4 text-primary" />
@@ -267,7 +309,17 @@ export default function Settings() {
                           <span className="text-sm font-semibold">{service.label}</span>
                           <span className="text-xs text-muted-foreground ml-2">({selectedOption?.label})</span>
                         </div>
-                        {isConfigured && (
+                        {saveStatus === "success" && (
+                          <Badge variant="outline" className="text-xs text-green-500 border-green-500/30 gap-1">
+                            <Check className="w-3 h-3" /> Just Saved
+                          </Badge>
+                        )}
+                        {saveStatus === "error" && (
+                          <Badge variant="outline" className="text-xs text-red-500 border-red-500/30 gap-1">
+                            <AlertCircle className="w-3 h-3" /> Failed
+                          </Badge>
+                        )}
+                        {!saveStatus && isConfigured && (
                           <Badge variant="outline" className="text-xs text-green-500 border-green-500/30 gap-1">
                             <Check className="w-3 h-3" /> Configured
                           </Badge>

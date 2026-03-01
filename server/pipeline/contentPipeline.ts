@@ -4,7 +4,7 @@
  * Orchestrates the end-to-end content creation flow using CREATOR'S OWN API keys:
  * 1. Script Generation (creator's OpenAI / Claude / Gemini key)
  * 2. Voice Generation (creator's ElevenLabs / PlayHT key)
- * 3. Thumbnail/Image Generation (creator's Replicate / fal.ai / DALL-E key)
+ * 3. Thumbnail/Image Generation (creator's FLUX (BFL) / Venice.ai / DALL-E / Replicate / fal.ai key)
  * 
  * We do NOT provide any built-in AI. Creators bring their own keys.
  * If a key is missing for a step, that step is skipped with a clear message.
@@ -67,19 +67,6 @@ async function getCreatorApiKey(userId: number, service: string): Promise<string
     .limit(1);
 
   return result.length > 0 ? result[0].apiKey : null;
-}
-
-// ==================== HELPER: GET CREATOR MODEL PREFERENCE ====================
-
-async function getCreatorModelPreference(userId: number, category: string): Promise<string | null> {
-  const db = await getDb();
-  if (!db) return null;
-
-  // We store model preferences as api keys with service like "script_model", "voice_model", etc.
-  // For now, derive the model from the service key they've added
-  // e.g., if they have an "openai" key, we use GPT-4o for scripts
-  // if they have a "claude" key, we use Claude for scripts
-  return null; // Model is inferred from which key they have
 }
 
 // ==================== HELPER: GET CHARACTER ====================
@@ -340,13 +327,12 @@ async function generateVoice(
   }
 
   if (playHtKey) {
-    // PlayHT integration
     try {
       const response = await fetch("https://api.play.ht/api/v2/tts/stream", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${playHtKey}`,
-          "X-USER-ID": "creator", // PlayHT requires user ID, creator can set this
+          "X-USER-ID": "creator",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -387,11 +373,14 @@ async function generateThumbnail(
   platform: string,
   userId: number,
 ): Promise<{ thumbnailUrl: string | null; skipped: boolean; model: string | null }> {
-  const replicateKey = await getCreatorApiKey(userId, "replicate");
-  const falKey = await getCreatorApiKey(userId, "fal");
-  const openAiKey = await getCreatorApiKey(userId, "openai"); // DALL-E uses OpenAI key
+  // Check all supported image services
+  const fluxKey = await getCreatorApiKey(userId, "flux");       // BFL FLUX direct API
+  const veniceKey = await getCreatorApiKey(userId, "venice");   // Venice.ai
+  const replicateKey = await getCreatorApiKey(userId, "replicate"); // Replicate
+  const dalleKey = await getCreatorApiKey(userId, "dalle");     // DALL-E (dedicated key)
+  const openAiKey = await getCreatorApiKey(userId, "openai");   // OpenAI (shared with script)
 
-  if (!replicateKey && !falKey && !openAiKey) {
+  if (!fluxKey && !veniceKey && !replicateKey && !dalleKey && !openAiKey) {
     return { thumbnailUrl: null, skipped: true, model: null };
   }
 
@@ -405,10 +394,140 @@ async function generateThumbnail(
   const styleDesc = styleMap[visualStyle || "photorealistic"] || styleMap.photorealistic;
   const prompt = `Create a ${platform} thumbnail for a video about "${topic}" featuring a character named ${characterName}. Style: ${styleDesc}. The thumbnail should be eye-catching, professional, and optimized for social media. Include bold visual elements and a clean composition. No text overlays.`;
 
-  // Try Replicate (Flux) first, then fal.ai, then DALL-E
+  // Priority: FLUX (BFL) → Venice.ai → Replicate → DALL-E → OpenAI (DALL-E fallback)
+
+  // ---- BFL FLUX Direct API ----
+  if (fluxKey) {
+    try {
+      console.log("[Pipeline] Generating thumbnail with BFL FLUX Pro...");
+      
+      // Submit generation request
+      const createResponse = await fetch("https://api.bfl.ai/v1/flux-pro-1.1", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-key": fluxKey,
+        },
+        body: JSON.stringify({
+          prompt,
+          width: 1280,
+          height: 720,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const err = await createResponse.text();
+        throw new Error(`BFL FLUX API error (${createResponse.status}): ${err}`);
+      }
+
+      const createData = await createResponse.json();
+      const pollingUrl = createData.polling_url;
+      const requestId = createData.id;
+
+      if (!pollingUrl) {
+        throw new Error(`BFL FLUX: No polling URL returned (request ID: ${requestId})`);
+      }
+
+      // Poll for completion
+      let attempts = 0;
+      const maxAttempts = 120; // 2 minutes max (polling every 1s)
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const pollResponse = await fetch(pollingUrl, {
+          headers: { "x-key": fluxKey },
+        });
+
+        if (!pollResponse.ok) {
+          throw new Error(`BFL FLUX poll error (${pollResponse.status})`);
+        }
+
+        const pollData = await pollResponse.json();
+        
+        if (pollData.status === "Ready") {
+          const imageUrl = pollData.result?.sample;
+          if (!imageUrl) throw new Error("BFL FLUX: No image URL in result");
+
+          // Download and re-upload to our S3 (BFL URLs expire in 10 min)
+          const imageResponse = await fetch(imageUrl);
+          if (!imageResponse.ok) throw new Error("Failed to download BFL FLUX image");
+          const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+          const { url } = await storagePut(
+            `thumbnails/${Date.now()}-flux-thumb.png`,
+            imageBuffer,
+            "image/png"
+          );
+
+          return { thumbnailUrl: url, skipped: false, model: "flux-pro-1.1" };
+        }
+
+        if (pollData.status === "Error" || pollData.status === "Failed") {
+          throw new Error(`BFL FLUX generation failed: ${JSON.stringify(pollData)}`);
+        }
+
+        // Still pending, continue polling
+        attempts++;
+      }
+
+      throw new Error("BFL FLUX: Generation timed out after 2 minutes");
+    } catch (error: any) {
+      console.error("[Pipeline] BFL FLUX image generation failed:", error.message);
+      // Fall through to try other services
+    }
+  }
+
+  // ---- Venice.ai ----
+  if (veniceKey) {
+    try {
+      console.log("[Pipeline] Generating thumbnail with Venice.ai...");
+      
+      const response = await fetch("https://api.venice.ai/api/v1/image/generate", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${veniceKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "fluently-xl",
+          prompt,
+          width: 1280,
+          height: 720,
+          format: "png",
+          return_binary: false,
+          safe_mode: false,
+          steps: 20,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Venice.ai API error (${response.status}): ${err}`);
+      }
+
+      const data = await response.json();
+      const base64Image = data.images?.[0];
+      if (!base64Image) throw new Error("Venice.ai: No image data in response");
+
+      // Decode base64 and upload to S3
+      const imageBuffer = Buffer.from(base64Image, "base64");
+      const { url } = await storagePut(
+        `thumbnails/${Date.now()}-venice-thumb.png`,
+        imageBuffer,
+        "image/png"
+      );
+
+      return { thumbnailUrl: url, skipped: false, model: "venice-fluently-xl" };
+    } catch (error: any) {
+      console.error("[Pipeline] Venice.ai image generation failed:", error.message);
+      // Fall through to try other services
+    }
+  }
+
+  // ---- Replicate (Flux via Replicate) ----
   if (replicateKey) {
     try {
-      // Create prediction with Flux model
+      console.log("[Pipeline] Generating thumbnail with Replicate...");
+      
       const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
         headers: {
@@ -452,67 +571,31 @@ async function generateThumbnail(
       const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
       if (!imageUrl) throw new Error("No image output from Replicate");
 
-      // Download and re-upload to our S3
       const imageResponse = await fetch(imageUrl);
       const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
       const { url } = await storagePut(
-        `thumbnails/${Date.now()}-thumb.png`,
+        `thumbnails/${Date.now()}-replicate-thumb.png`,
         imageBuffer,
         "image/png"
       );
 
-      return { thumbnailUrl: url, skipped: false, model: "flux-1.1-pro" };
+      return { thumbnailUrl: url, skipped: false, model: "flux-1.1-pro (replicate)" };
     } catch (error: any) {
       console.error("[Pipeline] Replicate image generation failed:", error.message);
-      throw error;
+      // Fall through to try other services
     }
   }
 
-  if (falKey) {
+  // ---- DALL-E (dedicated key or shared OpenAI key) ----
+  const dalleApiKey = dalleKey || openAiKey;
+  if (dalleApiKey) {
     try {
-      const response = await fetch("https://queue.fal.run/fal-ai/flux/dev", {
-        method: "POST",
-        headers: {
-          "Authorization": `Key ${falKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          image_size: "landscape_16_9",
-          num_images: 1,
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.text();
-        throw new Error(`fal.ai API error (${response.status}): ${err}`);
-      }
-
-      const data = await response.json();
-      const imageUrl = data.images?.[0]?.url;
-      if (!imageUrl) throw new Error("No image output from fal.ai");
-
-      const imageResponse = await fetch(imageUrl);
-      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-      const { url } = await storagePut(
-        `thumbnails/${Date.now()}-thumb.png`,
-        imageBuffer,
-        "image/png"
-      );
-
-      return { thumbnailUrl: url, skipped: false, model: "flux-dev" };
-    } catch (error: any) {
-      console.error("[Pipeline] fal.ai image generation failed:", error.message);
-      throw error;
-    }
-  }
-
-  if (openAiKey) {
-    try {
+      console.log("[Pipeline] Generating thumbnail with DALL-E 3...");
+      
       const response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${openAiKey}`,
+          "Authorization": `Bearer ${dalleApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -536,7 +619,7 @@ async function generateThumbnail(
       const imageResponse = await fetch(imageUrl);
       const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
       const { url } = await storagePut(
-        `thumbnails/${Date.now()}-thumb.png`,
+        `thumbnails/${Date.now()}-dalle-thumb.png`,
         imageBuffer,
         "image/png"
       );
@@ -544,7 +627,6 @@ async function generateThumbnail(
       return { thumbnailUrl: url, skipped: false, model: "dall-e-3" };
     } catch (error: any) {
       console.error("[Pipeline] DALL-E image generation failed:", error.message);
-      throw error;
     }
   }
 
@@ -654,8 +736,8 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
     );
 
     if (thumbnailSkipped) {
-      progress.steps.thumbnail = { status: "skipped", result: "Add a Replicate, fal.ai, or OpenAI API key in Settings to enable thumbnail generation" };
-      missingKeys.push("Image (Replicate, fal.ai, or OpenAI)");
+      progress.steps.thumbnail = { status: "skipped", result: "Add a FLUX, Venice.ai, Replicate, or OpenAI API key in Settings to enable thumbnail generation" };
+      missingKeys.push("Image (FLUX, Venice.ai, Replicate, or OpenAI)");
     } else {
       progress.steps.thumbnail = { status: "complete", result: `Thumbnail generated with ${imageModel}` };
     }

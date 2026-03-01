@@ -124,3 +124,10 @@
 - [x] Add logout button to sidebar
 - [x] Fix admin panel visibility in sidebar (already works via useAuth role check)
 - [x] Review character creation flow for launch readiness
+
+## Phase 15: Fix API Key Save Error
+- [ ] Fix 'Failed to save some settings' error when saving API keys on Railway
+- [ ] Map user's keys: OpenAI (script), ElevenLabs (voice), FLUX/BFL (image), Venice.ai (video/image)
+- [ ] Update content pipeline to support Black Forest Labs FLUX and Venice.ai
+- [ ] Test full flow: character creation → content generation → pipeline
+- [ ] Production hardening and push to Railway
