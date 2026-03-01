@@ -12,13 +12,15 @@ import {
 
 /**
  * Core user table backing auth flow.
+ * Self-hosted: email/password authentication with JWT sessions.
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("openId", { length: 64 }).unique(), // kept for backward compat, nullable now
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: text("passwordHash"), // bcrypt hash
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
+  loginMethod: varchar("loginMethod", { length: 64 }).default("email"),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   plan: mysqlEnum("plan", ["free", "pro", "enterprise"]).default("free").notNull(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),

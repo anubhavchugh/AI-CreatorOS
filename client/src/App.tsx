@@ -18,6 +18,23 @@ import AdminPanel from "./pages/AdminPanel";
 import CharacterWizard from "./pages/CharacterWizard";
 import GenerateContent from "./pages/GenerateContent";
 import ContentLibrary from "./pages/ContentLibrary";
+import { SignIn, SignUp } from "@clerk/clerk-react";
+
+function ClerkSignInPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" afterSignInUrl="/dashboard" />
+    </div>
+  );
+}
+
+function ClerkSignUpPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" afterSignUpUrl="/dashboard" />
+    </div>
+  );
+}
 
 function DashboardRouter() {
   return (
@@ -45,6 +62,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/sign-in" component={ClerkSignInPage} />
+      <Route path="/sign-up" component={ClerkSignUpPage} />
       <Route path="/dashboard" nest component={DashboardRouter} />
       <Route path="/characters" component={DashboardRouter} />
       <Route path="/characters/new" component={DashboardRouter} />

@@ -1,10 +1,21 @@
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
+  // Clerk auth
+  clerkSecretKey: process.env.CLERK_SECRET_KEY ?? "",
+  clerkPublishableKey: process.env.VITE_CLERK_PUBLISHABLE_KEY ?? "",
+  // Database
   databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  // Runtime
   isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // S3 / Cloudflare R2 storage
+  s3Bucket: process.env.S3_BUCKET ?? "",
+  s3Region: process.env.S3_REGION ?? "auto",
+  s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
+  s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
+  s3Endpoint: process.env.S3_ENDPOINT ?? "", // Cloudflare R2 endpoint
+  s3PublicUrl: process.env.S3_PUBLIC_URL ?? "", // R2 public bucket URL (e.g. https://pub-xxx.r2.dev)
+  // Stripe
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  // Admin email (first user with this email gets admin role)
+  adminEmail: process.env.ADMIN_EMAIL ?? "",
 };

@@ -67,3 +67,24 @@
 - [x] Published URL stored in database
 - [x] Write vitest tests for publishing and content library procedures (59 tests total)
 - [x] Save checkpoint and deliver
+
+## Phase 10: Remove Manus Dependencies — Migrate to Phase 1 Stack
+- [x] Install Clerk SDK (@clerk/express + @clerk/clerk-react)
+- [x] Replace Manus OAuth with Clerk auth middleware (server)
+- [x] Replace useAuth hook with Clerk's useUser/useAuth
+- [x] Replace Manus login/register flow with Clerk's SignIn/SignUp components
+- [x] Replace Manus storage proxy with Cloudflare R2 (S3-compatible)
+- [x] Stub out unused Manus services (LLM, maps, image gen, voice transcription)
+- [x] Clean env.ts — remove all Manus env vars, add Clerk/R2/Resend vars
+- [x] Clean vite.config.ts — remove vite-plugin-manus-runtime
+- [x] Update server entry point — remove Manus OAuth routes
+- [x] Update main.tsx — remove Manus auth redirect logic
+- [x] Update Landing.tsx — use Clerk sign-in instead of getLoginUrl
+- [x] Update DashboardLayout — use Clerk user info
+- [x] Add Dockerfile for Railway deployment
+- [x] Add railway.toml configuration
+- [x] Add ENV_SETUP.md with all required env vars
+- [x] Fix all TypeScript errors (0 errors)
+- [x] Update vitest tests (59 tests passing)
+- [x] Verify build succeeds
+- [ ] Export to GitHub (anubhavchugh/AI-CreatorOS)

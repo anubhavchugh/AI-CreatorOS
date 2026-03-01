@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+// Auth is handled by Clerk — sign-in/sign-up routes
 import {
   Zap, Users, Clapperboard, BarChart3, DollarSign, MessageCircle,
   ArrowRight, Play, Sun, Moon, Sparkles, Globe, Check,
@@ -148,7 +148,7 @@ export default function Landing() {
 
   const handlePricingCta = (planKey: string) => {
     if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
+      navigate("/sign-in");
       return;
     }
     if (planKey === "free") {
@@ -187,10 +187,10 @@ export default function Landing() {
               </Button>
             ) : (
               <>
-                <Button variant="outline" size="sm" onClick={() => (window.location.href = getLoginUrl())}>
+                <Button variant="outline" size="sm" onClick={() => navigate("/sign-in")}>
                   Sign In
                 </Button>
-                <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
+                <Button size="sm" onClick={() => navigate("/sign-up")} className="gap-1.5">
                   Get Started <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
               </>
@@ -462,7 +462,7 @@ export default function Landing() {
                   Go to Dashboard <ArrowRight className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button size="lg" onClick={() => (window.location.href = getLoginUrl())} className="gap-2">
+                <Button size="lg" onClick={() => navigate("/sign-up")} className="gap-2">
                   Get Started Free <ArrowRight className="w-4 h-4" />
                 </Button>
               )}

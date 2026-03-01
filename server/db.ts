@@ -15,7 +15,6 @@ import {
   InsertPlatformConnection,
   payments,
 } from "../drizzle/schema";
-import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -33,59 +32,40 @@ export async function getDb() {
 
 // ==================== USERS ====================
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+export async function createUser(data: {
+  email: string;
+  passwordHash: string;
+  name?: string | null;
+  role?: "user" | "admin";
+  loginMethod?: string;
+}): Promise<number> {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  if (!db) throw new Error("Database not available");
 
-  try {
-    const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
+  const result = await db.insert(users).values({
+    email: data.email,
+    passwordHash: data.passwordHash,
+    name: data.name || null,
+    role: data.role || "user",
+    loginMethod: data.loginMethod || "email",
+    lastSignedIn: new Date(),
+  });
 
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
+  return result[0].insertId;
+}
 
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
 
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -93,6 +73,12 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateUserLastSignedIn(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, id));
 }
 
 export async function getAllUsers() {
@@ -114,6 +100,34 @@ export async function getUserStats() {
     pro: pro?.count || 0,
     enterprise: enterprise?.count || 0,
   };
+}
+
+export async function getUserByClerkId(clerkId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  // Clerk ID is stored in the openId column
+  const result = await db.select().from(users).where(eq(users.openId, clerkId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createUserFromClerk(data: {
+  clerkId: string;
+  email: string;
+  name: string | null;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(users).values({
+    openId: data.clerkId,
+    email: data.email,
+    name: data.name,
+    loginMethod: "clerk",
+    role: "user",
+    lastSignedIn: new Date(),
+  });
+
+  return result[0].insertId;
 }
 
 // ==================== WAITLIST ====================
@@ -282,7 +296,6 @@ export async function getUserApiKeys(userId: number) {
 export async function upsertApiKey(data: InsertCreatorApiKey) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Check if key exists for this user+service
   const existing = await db
     .select()
     .from(creatorApiKeys)

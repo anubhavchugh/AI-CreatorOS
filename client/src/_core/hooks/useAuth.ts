@@ -1,84 +1,39 @@
-import { getLoginUrl } from "@/const";
+/**
+ * Auth hook that wraps Clerk's useUser and provides a consistent interface
+ * for the rest of the app.
+ *
+ * Also syncs the Clerk user with our backend (creates DB user on first login).
+ */
+import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 import { trpc } from "@/lib/trpc";
-import { TRPCClientError } from "@trpc/client";
-import { useCallback, useEffect, useMemo } from "react";
 
-type UseAuthOptions = {
-  redirectOnUnauthenticated?: boolean;
-  redirectPath?: string;
-};
+export function useAuth() {
+  const { user: clerkUser, isLoaded: clerkLoaded, isSignedIn } = useUser();
+  const { signOut } = useClerkAuth();
 
-export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
-    options ?? {};
-  const utils = trpc.useUtils();
-
+  // Fetch the DB user via tRPC (this also triggers user creation on first login via context.ts)
   const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
+    enabled: clerkLoaded && !!isSignedIn,
+    retry: 1,
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      utils.auth.me.setData(undefined, null);
-    },
-  });
+  const loading = !clerkLoaded || (!!isSignedIn && meQuery.isLoading);
 
-  const logout = useCallback(async () => {
-    try {
-      await logoutMutation.mutateAsync();
-    } catch (error: unknown) {
-      if (
-        error instanceof TRPCClientError &&
-        error.data?.code === "UNAUTHORIZED"
-      ) {
-        return;
+  const user = meQuery.data
+    ? {
+        ...meQuery.data,
+        avatarUrl: meQuery.data.avatarUrl || clerkUser?.imageUrl || null,
       }
-      throw error;
-    } finally {
-      utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
-    }
-  }, [logoutMutation, utils]);
-
-  const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
-    return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
-      error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
-    };
-  }, [
-    meQuery.data,
-    meQuery.error,
-    meQuery.isLoading,
-    logoutMutation.error,
-    logoutMutation.isPending,
-  ]);
-
-  useEffect(() => {
-    if (!redirectOnUnauthenticated) return;
-    if (meQuery.isLoading || logoutMutation.isPending) return;
-    if (state.user) return;
-    if (typeof window === "undefined") return;
-    if (window.location.pathname === redirectPath) return;
-
-    window.location.href = redirectPath
-  }, [
-    redirectOnUnauthenticated,
-    redirectPath,
-    logoutMutation.isPending,
-    meQuery.isLoading,
-    state.user,
-  ]);
+    : null;
 
   return {
-    ...state,
+    user,
+    loading,
+    error: meQuery.error ?? null,
+    isAuthenticated: !!isSignedIn && !!user,
+    logout: () => signOut(),
     refresh: () => meQuery.refetch(),
-    logout,
   };
 }
