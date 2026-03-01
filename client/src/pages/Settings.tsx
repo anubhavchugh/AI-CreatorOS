@@ -59,9 +59,9 @@ const AI_SERVICES = {
   video: {
     label: "Video Engine",
     icon: Video,
-    desc: "AI model for video generation (coming soon)",
+    desc: "AI model for video generation (image-to-video)",
     options: [
-      { value: "runway", label: "Runway Gen-3", keyPrefix: "rw-" },
+      { value: "runway", label: "Runway Gen-4 Turbo (Image → Video)", keyPrefix: "key_" },
     ],
   },
 } as const;

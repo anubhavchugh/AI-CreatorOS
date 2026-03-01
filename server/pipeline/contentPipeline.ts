@@ -5,7 +5,8 @@
  * 1. Script Generation (OpenAI / Claude / Gemini)
  * 2. Voice Generation (ElevenLabs / PlayHT)
  * 3. Image/Thumbnail Generation (BFL FLUX Pro / Venice.ai / DALL-E / Replicate)
- * 4. Video Composition (ffmpeg: combines images + audio into video)
+ * 4. Video Generation (Runway ML Gen-4 Turbo — image-to-video)
+ *    Fallback: ffmpeg composition (images + audio → video) if no Runway key
  * 
  * We do NOT provide any built-in AI. Creators bring their own keys.
  * If a key is missing for a step, that step is skipped with a clear message.
@@ -647,21 +648,194 @@ async function generateThumbnail(
   return { thumbnailUrl: null, skipped: true, model: null };
 }
 
-// ==================== STEP 4: VIDEO COMPOSITION ====================
+// ==================== STEP 4: VIDEO GENERATION (Runway ML Gen-4 Turbo) ====================
 
 /**
- * Composes a video from thumbnail image + audio using ffmpeg.
- * Creates a simple video with the thumbnail as a static/Ken Burns background
- * and the voiceover audio track. This produces a ready-to-upload video file.
+ * Generates a video using Runway ML Gen-4 Turbo (image-to-video).
+ * Takes the character thumbnail image and animates it into a short video clip.
+ * 
+ * Fallback: If no Runway key is available, uses ffmpeg to compose a simple
+ * video from the thumbnail + audio (Ken Burns effect).
+ * 
+ * Pipeline flow:
+ *   thumbnail image → Runway Gen-4 Turbo → animated video clip
+ *   Then: animated video + voiceover audio → ffmpeg merge → final video
  */
-async function composeVideo(
+async function generateVideo(
+  thumbnailUrl: string | null,
+  audioUrl: string | null,
+  characterName: string,
+  topic: string,
+  platform: string,
+  userId: number,
+): Promise<{ videoUrl: string | null; skipped: boolean; model: string | null }> {
+  const runwayKey = await getCreatorApiKey(userId, "runway");
+
+  // If we have a Runway key AND a thumbnail, use Runway Gen-4 Turbo for real AI video
+  if (runwayKey && thumbnailUrl) {
+    try {
+      console.log("[Pipeline] Generating AI video with Runway Gen-4 Turbo (image-to-video)...");
+
+      // Import the Runway SDK dynamically to avoid issues if not installed
+      const { default: RunwayML, TaskFailedError, TaskTimedOutError } = await import("@runwayml/sdk");
+
+      // Create client with the creator's own API key
+      const client = new RunwayML({ apiKey: runwayKey });
+
+      // Determine aspect ratio based on platform
+      const ratioMap: Record<string, "1280:720" | "720:1280"> = {
+        youtube: "1280:720",
+        tiktok: "720:1280",
+        instagram: "720:1280",
+      };
+      const ratio = ratioMap[platform.toLowerCase()] || "1280:720";
+
+      // Build a motion prompt that describes what the character should do
+      const motionPrompt = `The character ${characterName} is presenting a video about "${topic}". Subtle natural movement, the character looks at the camera with engaging expressions, slight head movement, and natural blinking. Cinematic quality, smooth motion.`;
+
+      // Create the image-to-video task
+      // gen4_turbo: 5 credits/sec, image-to-video only, cheapest option
+      const task = await client.imageToVideo
+        .create({
+          model: "gen4_turbo",
+          promptImage: thumbnailUrl,
+          promptText: motionPrompt,
+          ratio: ratio,
+          duration: 5, // 5 seconds = 25 credits ($0.25)
+        })
+        .waitForTaskOutput({
+          timeout: 5 * 60 * 1000, // 5 minute timeout
+        });
+
+      console.log("[Pipeline] Runway task completed:", task.id, "status:", task.status);
+
+      // task.output is an array of video URLs (temporary, expire in 24-48h)
+      const videoOutputUrl = task.output?.[0];
+      if (!videoOutputUrl) {
+        throw new Error("Runway Gen-4 Turbo: No video URL in task output");
+      }
+
+      // Download the generated video
+      console.log("[Pipeline] Downloading Runway video...");
+      const videoResponse = await fetch(videoOutputUrl);
+      if (!videoResponse.ok) {
+        throw new Error(`Runway: Failed to download video (${videoResponse.status})`);
+      }
+
+      const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+
+      // If we have audio, merge the Runway video with the voiceover audio using ffmpeg
+      if (audioUrl) {
+        console.log("[Pipeline] Merging Runway video with voiceover audio...");
+        const finalVideoUrl = await mergeVideoWithAudio(videoBuffer, audioUrl, platform);
+        if (finalVideoUrl) {
+          return { videoUrl: finalVideoUrl, skipped: false, model: "runway-gen4-turbo + audio" };
+        }
+        // If merge fails, upload the video without audio
+      }
+
+      // Upload the Runway video as-is (no audio merge needed or merge failed)
+      const { url } = await storagePut(
+        `videos/${Date.now()}-runway-gen4.mp4`,
+        videoBuffer,
+        "video/mp4"
+      );
+
+      return { videoUrl: url, skipped: false, model: "runway-gen4-turbo" };
+    } catch (error: any) {
+      console.error("[Pipeline] Runway Gen-4 Turbo video generation failed:", error.message);
+      // Fall through to ffmpeg fallback
+      console.log("[Pipeline] Falling back to ffmpeg video composition...");
+    }
+  }
+
+  // ---- FALLBACK: ffmpeg composition (thumbnail + audio → video) ----
+  return composeVideoFfmpeg(thumbnailUrl, audioUrl, platform);
+}
+
+/**
+ * Merge a video buffer with an audio track using ffmpeg.
+ * Returns the URL of the merged video, or null if merge fails.
+ */
+async function mergeVideoWithAudio(
+  videoBuffer: Buffer,
+  audioUrl: string,
+  platform: string,
+): Promise<string | null> {
+  // Check if ffmpeg is available
+  try {
+    await execFileAsync("ffmpeg", ["-version"]);
+  } catch {
+    console.warn("[Pipeline] ffmpeg not available, cannot merge audio");
+    return null;
+  }
+
+  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "merge-"));
+
+  try {
+    const videoPath = path.join(tmpDir, "video.mp4");
+    const audioPath = path.join(tmpDir, "audio.mp3");
+    const outputPath = path.join(tmpDir, "merged.mp4");
+
+    // Write video buffer to temp file
+    await fs.promises.writeFile(videoPath, videoBuffer);
+
+    // Download audio
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) throw new Error("Failed to download audio for merge");
+    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+    await fs.promises.writeFile(audioPath, audioBuffer);
+
+    // Merge: take video from Runway, audio from voiceover
+    // -shortest ensures the output is as long as the shorter input (the 5s video)
+    await execFileAsync("ffmpeg", [
+      "-i", videoPath,
+      "-i", audioPath,
+      "-c:v", "copy",        // Keep video codec as-is (no re-encoding)
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-map", "0:v:0",       // Video from first input
+      "-map", "1:a:0",       // Audio from second input
+      "-shortest",           // Match shortest stream
+      "-movflags", "+faststart",
+      "-y",
+      outputPath,
+    ], { timeout: 120000 }); // 2 min timeout
+
+    // Upload merged video
+    const mergedBuffer = await fs.promises.readFile(outputPath);
+    const { url } = await storagePut(
+      `videos/${Date.now()}-runway-merged.mp4`,
+      mergedBuffer,
+      "video/mp4"
+    );
+
+    return url;
+  } catch (error: any) {
+    console.error("[Pipeline] Video-audio merge failed:", error.message);
+    return null;
+  } finally {
+    try {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+/**
+ * Fallback: Composes a video from thumbnail image + audio using ffmpeg.
+ * Creates a simple video with the thumbnail as a static/Ken Burns background
+ * and the voiceover audio track.
+ */
+async function composeVideoFfmpeg(
   thumbnailUrl: string | null,
   audioUrl: string | null,
   platform: string,
-): Promise<{ videoUrl: string | null; skipped: boolean }> {
+): Promise<{ videoUrl: string | null; skipped: boolean; model: string | null }> {
   // Need at least audio to create a video
   if (!audioUrl) {
-    return { videoUrl: null, skipped: true };
+    return { videoUrl: null, skipped: true, model: null };
   }
 
   // Check if ffmpeg is available
@@ -669,7 +843,7 @@ async function composeVideo(
     await execFileAsync("ffmpeg", ["-version"]);
   } catch {
     console.warn("[Pipeline] ffmpeg not available, skipping video composition");
-    return { videoUrl: null, skipped: true };
+    return { videoUrl: null, skipped: true, model: null };
   }
 
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "video-"));
@@ -720,7 +894,7 @@ async function composeVideo(
         outputPath,
       ], { timeout: 300000 }); // 5 min timeout
     } else {
-      // Audio-only: create video with solid dark background + waveform-style visualization
+      // Audio-only: create video with solid dark background
       console.log("[Pipeline] Composing video with ffmpeg (audio only, dark background)...");
       await execFileAsync("ffmpeg", [
         "-f", "lavfi",
@@ -746,10 +920,10 @@ async function composeVideo(
       "video/mp4"
     );
 
-    return { videoUrl: url, skipped: false };
+    return { videoUrl: url, skipped: false, model: "ffmpeg-composition" };
   } catch (error: any) {
     console.error("[Pipeline] Video composition failed:", error.message);
-    return { videoUrl: null, skipped: true };
+    return { videoUrl: null, skipped: true, model: null };
   } finally {
     // Clean up temp files
     try {
@@ -771,6 +945,7 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
   thumbnailUrl: string | null;
   imageModel: string | null;
   videoUrl: string | null;
+  videoModel: string | null;
   voiceSkipped: boolean;
   thumbnailSkipped: boolean;
   videoSkipped: boolean;
@@ -875,25 +1050,32 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
       await updateContentStatus(contentId, "generating", { thumbnailUrl });
     }
 
-    // ---- STEP 4: VIDEO COMPOSITION ----
+    // ---- STEP 4: VIDEO GENERATION (Runway ML Gen-4 Turbo) ----
     progress.currentStep = "video";
     progress.steps.video.status = "running";
     progressMap.set(contentId, { ...progress });
 
-    const { videoUrl, skipped: videoSkipped } = await composeVideo(
+    const { videoUrl, skipped: videoSkipped, model: videoModel } = await generateVideo(
       thumbnailUrl,
       audioUrl,
+      character.name,
+      input.topic,
       input.platform,
+      input.userId,
     );
 
     if (videoSkipped) {
-      if (!audioUrl) {
-        progress.steps.video = { status: "skipped", result: "Video composition requires audio. Add a voice API key to enable." };
+      if (!thumbnailUrl && !audioUrl) {
+        progress.steps.video = { status: "skipped", result: "Video requires at least a thumbnail or audio. Add image/voice API keys." };
       } else {
-        progress.steps.video = { status: "skipped", result: "Video composition unavailable (ffmpeg not installed)" };
+        progress.steps.video = { status: "skipped", result: "Add a Runway ML API key in Settings to generate AI video, or ensure ffmpeg is available." };
+        missingKeys.push("Video (Runway ML)");
       }
     } else {
-      progress.steps.video = { status: "complete", result: "Video composed from image + audio" };
+      const videoDesc = videoModel?.includes("runway")
+        ? `AI video generated with Runway Gen-4 Turbo${videoModel.includes("audio") ? " + voiceover" : ""}`
+        : `Video composed with ${videoModel}`;
+      progress.steps.video = { status: "complete", result: videoDesc };
     }
 
     // Update content with video URL and move to review
@@ -916,6 +1098,7 @@ export async function runContentPipeline(input: GenerateContentInput): Promise<{
       thumbnailUrl,
       imageModel,
       videoUrl,
+      videoModel,
       voiceSkipped,
       thumbnailSkipped,
       videoSkipped,

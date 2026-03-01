@@ -34,11 +34,19 @@ vi.mock("../db", () => ({
   getUserStats: vi.fn().mockResolvedValue({ total: 0, pro: 0, enterprise: 0 }),
   getRevenueStats: vi.fn().mockResolvedValue({ totalRevenue: 0, monthlyRevenue: 0, totalPayments: 0 }),
   getRecentPayments: vi.fn().mockResolvedValue([]),
+  getDashboardStats: vi.fn().mockResolvedValue({ totalCharacters: 0, totalContent: 0, activeCharacters: 0, publishedContent: 0 }),
+  getDashboardCharacters: vi.fn().mockResolvedValue([]),
+  getDashboardPipeline: vi.fn().mockResolvedValue([]),
+  getContentItemById: vi.fn().mockResolvedValue(null),
+  deleteContentItem: vi.fn().mockResolvedValue(undefined),
+  getUserContentWithCharacters: vi.fn().mockResolvedValue([]),
+  getPlatformConnectionForUser: vi.fn().mockResolvedValue(null),
 }));
 
-// Mock stripe
-vi.mock("../stripe/stripe", () => ({
-  createCheckoutSession: vi.fn().mockResolvedValue("https://checkout.stripe.com/test"),
+// Mock razorpay
+vi.mock("../razorpay/razorpay", () => ({
+  createRazorpayOrder: vi.fn().mockResolvedValue({ orderId: "order_test", amount: 249900 }),
+  handlePaymentVerification: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 // Mock the content pipeline
@@ -56,11 +64,12 @@ function createUserContext(overrides: Partial<AuthenticatedUser> = {}): TrpcCont
     openId: "test-user-123",
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    loginMethod: "clerk",
     role: "user",
     plan: "free",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    razorpayCustomerId: null,
+    razorpaySubscriptionId: null,
+    passwordHash: null,
     avatarUrl: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -99,7 +108,7 @@ beforeEach(() => {
 
 // ==================== PIPELINE GENERATE ====================
 describe("pipeline.generate", () => {
-  it("successfully generates content with all steps", async () => {
+  it("successfully generates content with all steps including video", async () => {
     mockRunContentPipeline.mockResolvedValue({
       contentId: 42,
       script: "Hello everyone! Welcome to my tech review...",
@@ -107,9 +116,12 @@ describe("pipeline.generate", () => {
       audioUrl: "https://storage.example.com/audio/voice.mp3",
       voiceModel: "eleven_multilingual_v2",
       thumbnailUrl: "https://storage.example.com/thumbnails/thumb.png",
-      imageModel: "flux-1.1-pro",
+      imageModel: "flux-pro-1.1 (BFL)",
+      videoUrl: "https://storage.example.com/videos/runway-gen4.mp4",
+      videoModel: "runway-gen4-turbo + audio",
       voiceSkipped: false,
       thumbnailSkipped: false,
+      videoSkipped: false,
       missingKeys: [],
     });
 
@@ -127,12 +139,78 @@ describe("pipeline.generate", () => {
     expect(result.scriptModel).toBe("gpt-4o");
     expect(result.audioUrl).toBeTruthy();
     expect(result.thumbnailUrl).toBeTruthy();
+    expect(result.videoUrl).toBeTruthy();
+    expect(result.videoModel).toContain("runway");
     expect(result.voiceSkipped).toBe(false);
     expect(result.thumbnailSkipped).toBe(false);
+    expect(result.videoSkipped).toBe(false);
     expect(result.missingKeys).toHaveLength(0);
   });
 
-  it("generates content with skipped voice and thumbnail when keys are missing", async () => {
+  it("generates content with Runway video but no audio merge", async () => {
+    mockRunContentPipeline.mockResolvedValue({
+      contentId: 50,
+      script: "A visual showcase of the latest tech...",
+      scriptModel: "gpt-4o",
+      audioUrl: null,
+      voiceModel: null,
+      thumbnailUrl: "https://storage.example.com/thumbnails/thumb.png",
+      imageModel: "flux-pro-1.1 (BFL)",
+      videoUrl: "https://storage.example.com/videos/runway-gen4.mp4",
+      videoModel: "runway-gen4-turbo",
+      voiceSkipped: true,
+      thumbnailSkipped: false,
+      videoSkipped: false,
+      missingKeys: ["Voice (ElevenLabs or PlayHT)"],
+    });
+
+    const ctx = createUserContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.pipeline.generate({
+      characterId: 1,
+      topic: "Visual Tech Showcase",
+      contentType: "reel",
+      platform: "instagram",
+    });
+
+    expect(result.videoUrl).toBeTruthy();
+    expect(result.videoModel).toBe("runway-gen4-turbo");
+    expect(result.voiceSkipped).toBe(true);
+    expect(result.videoSkipped).toBe(false);
+  });
+
+  it("falls back to ffmpeg when Runway key is missing", async () => {
+    mockRunContentPipeline.mockResolvedValue({
+      contentId: 51,
+      script: "Here's my take on the latest AI trends...",
+      scriptModel: "gpt-4o",
+      audioUrl: "https://storage.example.com/audio/voice.mp3",
+      voiceModel: "eleven_multilingual_v2",
+      thumbnailUrl: "https://storage.example.com/thumbnails/thumb.png",
+      imageModel: "flux-pro-1.1 (BFL)",
+      videoUrl: "https://storage.example.com/videos/composed.mp4",
+      videoModel: "ffmpeg-composition",
+      voiceSkipped: false,
+      thumbnailSkipped: false,
+      videoSkipped: false,
+      missingKeys: ["Video (Runway ML)"],
+    });
+
+    const ctx = createUserContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.pipeline.generate({
+      characterId: 1,
+      topic: "AI Trends 2026",
+      contentType: "long_form",
+      platform: "youtube",
+    });
+
+    expect(result.videoUrl).toBeTruthy();
+    expect(result.videoModel).toBe("ffmpeg-composition");
+    expect(result.missingKeys).toContain("Video (Runway ML)");
+  });
+
+  it("generates content with skipped voice, thumbnail, and video when all keys are missing", async () => {
     mockRunContentPipeline.mockResolvedValue({
       contentId: 43,
       script: "Here's my take on the latest AI trends...",
@@ -141,9 +219,12 @@ describe("pipeline.generate", () => {
       voiceModel: null,
       thumbnailUrl: null,
       imageModel: null,
+      videoUrl: null,
+      videoModel: null,
       voiceSkipped: true,
       thumbnailSkipped: true,
-      missingKeys: ["Voice (ElevenLabs or PlayHT)", "Image (Replicate, fal.ai, or OpenAI)"],
+      videoSkipped: true,
+      missingKeys: ["Voice (ElevenLabs or PlayHT)", "Image (FLUX, Venice.ai, Replicate, or OpenAI)", "Video (Runway ML)"],
     });
 
     const ctx = createUserContext();
@@ -159,8 +240,9 @@ describe("pipeline.generate", () => {
     expect(result.script).toBeTruthy();
     expect(result.voiceSkipped).toBe(true);
     expect(result.thumbnailSkipped).toBe(true);
+    expect(result.videoSkipped).toBe(true);
     expect(result.missingKeys).toContain("Voice (ElevenLabs or PlayHT)");
-    expect(result.missingKeys).toContain("Image (Replicate, fal.ai, or OpenAI)");
+    expect(result.missingKeys).toContain("Video (Runway ML)");
   });
 
   it("rejects generation for a character that doesn't belong to user", async () => {
@@ -224,8 +306,11 @@ describe("pipeline.generate", () => {
       voiceModel: null,
       thumbnailUrl: null,
       imageModel: null,
+      videoUrl: null,
+      videoModel: null,
       voiceSkipped: true,
       thumbnailSkipped: true,
+      videoSkipped: true,
       missingKeys: [],
     });
 
@@ -274,14 +359,15 @@ describe("pipeline.generate", () => {
 
 // ==================== PIPELINE PROGRESS ====================
 describe("pipeline.progress", () => {
-  it("returns progress for an active pipeline", async () => {
+  it("returns progress for an active pipeline with video step", async () => {
     mockGetProgress.mockReturnValue({
       contentId: 42,
-      currentStep: "voice",
+      currentStep: "video",
       steps: {
         scripting: { status: "complete", result: "Script generated with gpt-4o" },
-        voice: { status: "running" },
-        thumbnail: { status: "pending" },
+        voice: { status: "complete", result: "Voice generated with eleven_multilingual_v2" },
+        thumbnail: { status: "complete", result: "Thumbnail generated with flux-pro-1.1 (BFL)" },
+        video: { status: "running" },
       },
     });
 
@@ -290,10 +376,11 @@ describe("pipeline.progress", () => {
     const result = await caller.pipeline.progress({ contentId: 42 });
 
     expect(result).toBeTruthy();
-    expect(result?.currentStep).toBe("voice");
+    expect(result?.currentStep).toBe("video");
     expect(result?.steps.scripting.status).toBe("complete");
-    expect(result?.steps.voice.status).toBe("running");
-    expect(result?.steps.thumbnail.status).toBe("pending");
+    expect(result?.steps.voice.status).toBe("complete");
+    expect(result?.steps.thumbnail.status).toBe("complete");
+    expect(result?.steps.video.status).toBe("running");
   });
 
   it("returns null for non-existent content", async () => {
@@ -306,14 +393,15 @@ describe("pipeline.progress", () => {
     expect(result).toBeNull();
   });
 
-  it("returns completed progress with all steps done", async () => {
+  it("returns completed progress with all steps including video done", async () => {
     mockGetProgress.mockReturnValue({
       contentId: 42,
       currentStep: "complete",
       steps: {
         scripting: { status: "complete", result: "Script generated with gpt-4o" },
         voice: { status: "complete", result: "Voice generated with eleven_multilingual_v2" },
-        thumbnail: { status: "complete", result: "Thumbnail generated with flux-1.1-pro" },
+        thumbnail: { status: "complete", result: "Thumbnail generated with flux-pro-1.1 (BFL)" },
+        video: { status: "complete", result: "AI video generated with Runway Gen-4 Turbo + voiceover" },
       },
     });
 
@@ -325,6 +413,8 @@ describe("pipeline.progress", () => {
     expect(result?.steps.scripting.status).toBe("complete");
     expect(result?.steps.voice.status).toBe("complete");
     expect(result?.steps.thumbnail.status).toBe("complete");
+    expect(result?.steps.video.status).toBe("complete");
+    expect(result?.steps.video.result).toContain("Runway");
   });
 
   it("returns failed progress with error details", async () => {
@@ -336,6 +426,7 @@ describe("pipeline.progress", () => {
         scripting: { status: "failed", error: "OpenAI API error (401): Invalid API key" },
         voice: { status: "pending" },
         thumbnail: { status: "pending" },
+        video: { status: "pending" },
       },
     });
 
@@ -348,14 +439,15 @@ describe("pipeline.progress", () => {
     expect(result?.steps.scripting.status).toBe("failed");
   });
 
-  it("returns progress with skipped steps", async () => {
+  it("returns progress with skipped steps including video", async () => {
     mockGetProgress.mockReturnValue({
       contentId: 42,
       currentStep: "complete",
       steps: {
         scripting: { status: "complete", result: "Script generated with gpt-4o" },
         voice: { status: "skipped", result: "Add an ElevenLabs or PlayHT API key" },
-        thumbnail: { status: "skipped", result: "Add a Replicate or fal.ai API key" },
+        thumbnail: { status: "skipped", result: "Add a FLUX, Venice.ai, Replicate, or OpenAI API key" },
+        video: { status: "skipped", result: "Add a Runway ML API key in Settings to generate AI video" },
       },
     });
 
@@ -366,6 +458,28 @@ describe("pipeline.progress", () => {
     expect(result?.currentStep).toBe("complete");
     expect(result?.steps.voice.status).toBe("skipped");
     expect(result?.steps.thumbnail.status).toBe("skipped");
+    expect(result?.steps.video.status).toBe("skipped");
+  });
+
+  it("returns progress during voice step", async () => {
+    mockGetProgress.mockReturnValue({
+      contentId: 42,
+      currentStep: "voice",
+      steps: {
+        scripting: { status: "complete", result: "Script generated with gpt-4o" },
+        voice: { status: "running" },
+        thumbnail: { status: "pending" },
+        video: { status: "pending" },
+      },
+    });
+
+    const ctx = createUserContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.pipeline.progress({ contentId: 42 });
+
+    expect(result?.currentStep).toBe("voice");
+    expect(result?.steps.voice.status).toBe("running");
+    expect(result?.steps.video.status).toBe("pending");
   });
 
   it("requires authentication", async () => {

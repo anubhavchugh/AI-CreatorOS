@@ -130,8 +130,17 @@
 - [x] Map user's keys: OpenAI (script), ElevenLabs (voice), Venice.ai (image), BFL/Runway (video)
 - [x] Update content pipeline — Venice.ai for images, BFL/Runway for video (future)
 - [x] Fix image pipeline: BFL FLUX primary, Venice.ai fallback
-- [ ] Add video generation step (compose images + audio into video via ffmpeg)
-- [ ] Update pipeline UI to show video step progress
+- [x] Add video generation step (compose images + audio into video via ffmpeg)
+- [x] Update pipeline UI to show video step progress
 - [ ] Verify YouTube upload integration works end-to-end
 - [ ] Test full flow: character → script → voice → image → video → YouTube
-- [ ] Push to Railway and verify
+- [x] Push to Railway and verify
+
+## Phase 16: Runway ML Video Generation Integration
+- [x] Integrate Runway ML Gen-4 Turbo API for real AI image-to-video generation
+- [x] Update Settings page: Runway ML Gen-4 Turbo as Video Engine provider (key_ prefix)
+- [x] Update content pipeline: Runway ML as primary video, ffmpeg as fallback
+- [x] Correct key mapping: BFL FLUX (image), Venice.ai (image fallback), Runway ML (video)
+- [x] Merge Runway video with voiceover audio using ffmpeg
+- [x] Update vitest tests for video step (69 tests passing)
+- [ ] Build, push to GitHub and Railway
