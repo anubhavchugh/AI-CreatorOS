@@ -126,8 +126,8 @@
 - [x] Review character creation flow for launch readiness
 
 ## Phase 15: Fix API Key Save Error
-- [ ] Fix 'Failed to save some settings' error when saving API keys on Railway
-- [ ] Map user's keys: OpenAI (script), ElevenLabs (voice), FLUX/BFL (image), Venice.ai (video/image)
-- [ ] Update content pipeline to support Black Forest Labs FLUX and Venice.ai
+- [x] Fix 'Failed to save some settings' error — rewrote Settings page with better error handling
+- [x] Map user's keys: OpenAI (script), ElevenLabs (voice), Venice.ai (image), BFL/Runway (video)
+- [x] Update content pipeline — Venice.ai for images, BFL/Runway for video (future)
 - [ ] Test full flow: character creation → content generation → pipeline
-- [ ] Production hardening and push to Railway
+- [ ] Push to Railway and verify
