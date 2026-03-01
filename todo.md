@@ -104,4 +104,13 @@
 - [x] Verify build succeeds
 - [x] Provide Clerk setup guide
 - [x] Provide Cloudflare R2 setup guide
-- [ ] Push to GitHub (main + uat branches)
+- [x] Push to GitHub (main + uat branches)
+
+## Phase 12: Fix Railway Deployment Healthcheck Failure
+- [x] Ensure server binds to 0.0.0.0:PORT from env (Railway injects dynamically)
+- [x] Add /health endpoint for Railway healthcheck
+- [x] Make Clerk middleware graceful when keys are missing
+- [x] Ensure server starts even if DATABASE_URL is not yet set
+- [x] Clerk keys validated (66 tests passing)
+- [x] Razorpay live keys validated
+- [ ] Push fix to GitHub

@@ -40,8 +40,9 @@ COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
 ENV NODE_ENV=production
-ENV PORT=3000
 
+# Railway injects PORT dynamically — do NOT hardcode it
+# The server reads process.env.PORT and falls back to 3000
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]
