@@ -113,4 +113,4 @@
 - [x] Ensure server starts even if DATABASE_URL is not yet set
 - [x] Clerk keys validated (66 tests passing)
 - [x] Razorpay live keys validated
-- [x] Push fix to GitHub (main + uat)
+- [ ] Push fix to GitHub
