@@ -32,6 +32,7 @@ import {
   Loader2,
   Play,
   Volume2,
+  Video,
   ImageIcon,
   MoreHorizontal,
   X,
@@ -444,28 +445,52 @@ function ContentDetailModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Thumbnail */}
-          {content.thumbnailUrl && (
-            <div className="rounded-xl overflow-hidden border border-border/50">
-              <img
-                src={content.thumbnailUrl}
-                alt="Content thumbnail"
-                className="w-full h-auto max-h-[300px] object-cover"
-              />
-            </div>
-          )}
-
-          {/* Audio Player */}
-          {content.mediaUrl && (
+          {/* Video Preview Player — shown when mediaUrl is a video */}
+          {content.mediaUrl && (content.mediaUrl.includes(".mp4") || content.mediaUrl.includes("video")) ? (
             <div>
               <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
-                <Volume2 className="w-4 h-4 text-primary" />
-                Audio
+                <Video className="w-4 h-4 text-primary" />
+                Video Preview
+                <Badge variant="outline" className="text-xs border-primary text-primary">Main Output</Badge>
               </h4>
-              <audio controls className="w-full" src={content.mediaUrl}>
-                Your browser does not support the audio element.
-              </audio>
+              <div className="rounded-xl overflow-hidden border border-border/50 bg-black">
+                <video
+                  controls
+                  className="w-full h-auto max-h-[400px]"
+                  src={content.mediaUrl}
+                  poster={content.thumbnailUrl || undefined}
+                  preload="metadata"
+                >
+                  Your browser does not support the video element.
+                </video>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Thumbnail (only show separately if no video) */}
+              {content.thumbnailUrl && (
+                <div className="rounded-xl overflow-hidden border border-border/50">
+                  <img
+                    src={content.thumbnailUrl}
+                    alt="Content thumbnail"
+                    className="w-full h-auto max-h-[300px] object-cover"
+                  />
+                </div>
+              )}
+
+              {/* Audio Player (only show if mediaUrl is audio, not video) */}
+              {content.mediaUrl && (
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-2 mb-2">
+                    <Volume2 className="w-4 h-4 text-primary" />
+                    Audio
+                  </h4>
+                  <audio controls className="w-full" src={content.mediaUrl}>
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              )}
+            </>
           )}
 
           {/* Script Preview */}
@@ -596,7 +621,9 @@ function ContentDetailModal({
                   rel="noopener noreferrer"
                 >
                   <Download className="w-3 h-3 mr-1" />
-                  Download Media
+                  {content.mediaUrl.includes(".mp4") || content.mediaUrl.includes("video")
+                    ? "Download Video"
+                    : "Download Audio"}
                 </a>
               </Button>
             )}
@@ -939,13 +966,25 @@ export default function ContentLibrary() {
                         </Badge>
                       </div>
                     )}
+                    {/* Video play button overlay */}
+                    {item.mediaUrl && (item.mediaUrl.includes(".mp4") || item.mediaUrl.includes("video")) && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 transition-all duration-300 group-hover:scale-110">
+                          <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    )}
                     {/* Media indicators */}
                     <div className="absolute bottom-2 right-2 flex gap-1">
-                      {item.mediaUrl && (
+                      {item.mediaUrl && (item.mediaUrl.includes(".mp4") || item.mediaUrl.includes("video")) ? (
+                        <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center">
+                          <Video className="w-3 h-3 text-white" />
+                        </div>
+                      ) : item.mediaUrl ? (
                         <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center">
                           <Volume2 className="w-3 h-3 text-white" />
                         </div>
-                      )}
+                      ) : null}
                       {item.script && (
                         <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center">
                           <FileText className="w-3 h-3 text-white" />
@@ -1106,9 +1145,11 @@ export default function ContentLibrary() {
                                 {item.script && (
                                   <FileText className="w-3 h-3 text-muted-foreground/50" />
                                 )}
-                                {item.mediaUrl && (
+                                {item.mediaUrl && (item.mediaUrl.includes(".mp4") || item.mediaUrl.includes("video")) ? (
+                                  <Video className="w-3 h-3 text-primary/60" />
+                                ) : item.mediaUrl ? (
                                   <Volume2 className="w-3 h-3 text-muted-foreground/50" />
-                                )}
+                                ) : null}
                                 {item.thumbnailUrl && (
                                   <ImageIcon className="w-3 h-3 text-muted-foreground/50" />
                                 )}

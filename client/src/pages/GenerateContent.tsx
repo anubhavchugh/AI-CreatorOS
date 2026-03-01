@@ -15,7 +15,7 @@ import { useLocation } from "wouter";
 import {
   Wand2, Mic, ImageIcon, CheckCircle2, AlertCircle, Loader2,
   ArrowLeft, ArrowRight, Sparkles, Play, Download, RotateCcw,
-  Settings, SkipForward, Volume2, Video,
+  Settings, Volume2, Video, XCircle,
   FolderOpen, Upload
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +38,7 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-type PipelineStepStatus = "pending" | "running" | "complete" | "failed" | "skipped";
+type PipelineStepStatus = "pending" | "running" | "complete" | "failed";
 
 type PipelineState = {
   phase: "setup" | "generating" | "results";
@@ -92,15 +92,13 @@ function StepIndicator({
     running: "border-primary text-primary animate-pulse",
     complete: "border-emerald-500 text-emerald-500",
     failed: "border-red-500 text-red-500",
-    skipped: "border-amber-500 text-amber-500",
   };
 
   const statusIcons: Record<PipelineStepStatus, React.ReactNode> = {
     pending: <span className="text-sm font-mono">{step}</span>,
     running: <Loader2 className="w-4 h-4 animate-spin" />,
     complete: <CheckCircle2 className="w-4 h-4" />,
-    failed: <AlertCircle className="w-4 h-4" />,
-    skipped: <SkipForward className="w-4 h-4" />,
+    failed: <XCircle className="w-4 h-4" />,
   };
 
   const bgColors: Record<PipelineStepStatus, string> = {
@@ -108,7 +106,6 @@ function StepIndicator({
     running: "bg-primary/10",
     complete: "bg-emerald-500/10",
     failed: "bg-red-500/10",
-    skipped: "bg-amber-500/10",
   };
 
   return (
@@ -130,17 +127,14 @@ function StepIndicator({
               Processing...
             </Badge>
           )}
-          {status === "skipped" && (
-            <Badge variant="outline" className="text-xs border-amber-500 text-amber-500">
-              Skipped
+          {status === "failed" && (
+            <Badge variant="outline" className="text-xs border-red-500 text-red-500">
+              Failed
             </Badge>
           )}
         </div>
         {result && status === "complete" && (
           <p className="text-xs text-emerald-400 mt-1">{result}</p>
-        )}
-        {result && status === "skipped" && (
-          <p className="text-xs text-amber-400 mt-1">{result}</p>
         )}
         {error && (
           <p className="text-xs text-red-400 mt-1">{error}</p>
@@ -161,6 +155,7 @@ export default function GenerateContent() {
   const [platform, setPlatform] = useState("youtube");
   const [tone, setTone] = useState("energetic");
   const [duration, setDuration] = useState("");
+  const [videoDuration, setVideoDuration] = useState<5 | 10 | 20 | 30 | 60>(5);
   const [additionalInstructions, setAdditionalInstructions] = useState("");
 
   // Pipeline state
@@ -179,7 +174,7 @@ export default function GenerateContent() {
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
   const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
-  const [missingKeys, setMissingKeys] = useState<string[]>([]);
+
   const [contentId, setContentId] = useState<number | null>(null);
 
   // Fetch user's characters
@@ -207,21 +202,16 @@ export default function GenerateContent() {
       setGeneratedAudioUrl(data.audioUrl);
       setGeneratedThumbnailUrl(data.thumbnailUrl);
       setGeneratedVideoUrl(data.videoUrl);
-      setMissingKeys(data.missingKeys);
 
       setPipelineState({
         phase: "results",
         steps: {
           scripting: { status: "complete", result: `Generated with ${data.scriptModel}` },
-          voice: data.voiceSkipped
-            ? { status: "skipped", result: "Add a voice API key in Settings to enable" }
-            : { status: "complete", result: `Generated with ${data.voiceModel}` },
-          thumbnail: data.thumbnailSkipped
-            ? { status: "skipped", result: "Add an image API key in Settings to enable" }
-            : { status: "complete", result: `Generated with ${data.imageModel}` },
-          video: data.videoSkipped
-            ? { status: "skipped", result: "Needs both voice audio and thumbnail to compose video" }
-            : { status: "complete", result: "Video composed from image + audio" },
+          voice: { status: "complete", result: `Generated with ${data.voiceModel}` },
+          thumbnail: { status: "complete", result: `Generated with ${data.imageModel}` },
+          video: { status: "complete", result: data.videoModel?.includes("runway")
+              ? `AI video generated with Runway Gen-4 Turbo (${videoDuration}s)`
+              : `Video composed with ${data.videoModel || "ffmpeg"}` },
         },
       });
 
@@ -229,14 +219,13 @@ export default function GenerateContent() {
     },
     onError: (error) => {
       const errorMsg = error.message || "Pipeline failed";
-      const isKeyError = errorMsg.startsWith("NO_SCRIPT_KEY:");
 
       setPipelineState((prev) => ({
         phase: "generating",
         steps: {
           ...prev.steps,
           scripting: prev.steps.scripting.status === "running"
-            ? { status: "failed", error: isKeyError ? "No script API key configured" : errorMsg }
+            ? { status: "failed", error: errorMsg }
             : prev.steps.scripting,
           voice: prev.steps.voice.status === "running"
             ? { status: "failed", error: errorMsg }
@@ -250,11 +239,7 @@ export default function GenerateContent() {
         },
       }));
 
-      if (isKeyError) {
-        toast.error("No API key found! Add your OpenAI, Anthropic, or Google key in Settings → API Keys.");
-      } else {
-        toast.error(`Generation failed: ${errorMsg}`);
-      }
+      toast.error(errorMsg);
     },
   });
 
@@ -328,6 +313,7 @@ export default function GenerateContent() {
       tone,
       topic,
       duration: duration || undefined,
+      videoDuration,
       additionalInstructions: additionalInstructions || undefined,
     });
   };
@@ -346,7 +332,6 @@ export default function GenerateContent() {
     setGeneratedAudioUrl(null);
     setGeneratedThumbnailUrl(null);
     setGeneratedVideoUrl(null);
-    setMissingKeys([]);
     setContentId(null);
   };
 
@@ -387,7 +372,7 @@ export default function GenerateContent() {
               <p className="font-semibold text-amber-500 text-sm">No Script API Key Configured</p>
               <p className="text-xs text-muted-foreground mt-1">
                 You need at least an OpenAI, Anthropic, or Google API key to generate scripts.
-                Voice, image, and video generation keys are optional but recommended for the full pipeline.
+                All four API keys (Script, Voice, Image, Video) are required for the full pipeline.
               </p>
               <Button
                 variant="outline"
@@ -436,8 +421,12 @@ export default function GenerateContent() {
                             : "border-border/50 hover:border-primary/30"
                         }`}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-lg font-bold mb-2">
-                          {char.name.charAt(0)}
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 flex items-center justify-center text-lg font-bold mb-2 overflow-hidden">
+                          {char.avatarUrl ? (
+                            <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
+                          ) : (
+                            char.name.charAt(0)
+                          )}
                         </div>
                         <p className="text-sm font-medium truncate">{char.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{char.niche || "General"}</p>
@@ -523,13 +512,44 @@ export default function GenerateContent() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-sm font-medium">Duration (optional)</Label>
+                    <Label className="text-sm font-medium">Script Duration (optional)</Label>
                     <Input
                       placeholder="e.g., 2 minutes, 45 seconds"
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
                       className="mt-1.5"
                     />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Video Duration</Label>
+                    <div className="grid grid-cols-5 gap-2 mt-1.5">
+                      {([
+                        { val: 5 as const, label: "5s", desc: "Quick Clip" },
+                        { val: 10 as const, label: "10s", desc: "Short" },
+                        { val: 20 as const, label: "20s", desc: "Reel" },
+                        { val: 30 as const, label: "30s", desc: "TikTok" },
+                        { val: 60 as const, label: "60s", desc: "YT Short" },
+                      ]).map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => setVideoDuration(opt.val)}
+                          className={`p-2 rounded-xl border-2 text-center transition-all duration-200 ${
+                            videoDuration === opt.val
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border/50 hover:border-primary/30 text-muted-foreground"
+                          }`}
+                        >
+                          <span className="text-sm font-semibold">{opt.label}</span>
+                          <p className="text-[10px] mt-0.5 opacity-70">{opt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                    {videoDuration > 10 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {Math.ceil(videoDuration / 10)} Runway clips will be chained together
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -569,14 +589,14 @@ export default function GenerateContent() {
                       label: "Image Engine",
                       icon: ImageIcon,
                       services: ["flux", "venice", "dalle", "replicate", "openai"],
-                      required: false,
+                      required: true,
                     },
                     {
                       label: "Video Engine",
                       icon: Video,
                       services: ["runway"],
-                      required: false,
-                      note: "Auto-composed from image + audio",
+                      required: true,
+                      note: "Runway Gen-4 Turbo (image → video)",
                     },
                   ].map((engine) => {
                     const hasKey = apiKeys?.some(
@@ -585,34 +605,26 @@ export default function GenerateContent() {
                     const activeKey = apiKeys?.find(
                       (k: any) => engine.services.includes(k.service) && k.isActive
                     );
-                    // Video engine doesn't need a key — it auto-composes
-                    const isVideoAuto = engine.label === "Video Engine";
                     return (
                       <div
                         key={engine.label}
                         className={`p-3 rounded-xl border-2 ${
-                          hasKey || isVideoAuto
+                          hasKey
                             ? "border-emerald-500/30 bg-emerald-500/5"
-                            : engine.required
-                            ? "border-red-500/30 bg-red-500/5"
-                            : "border-muted-foreground/20 bg-muted/10"
+                            : "border-red-500/30 bg-red-500/5"
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <engine.icon className="w-4 h-4" />
                           <span className="text-sm font-medium">{engine.label}</span>
                         </div>
-                        {isVideoAuto ? (
-                          <p className="text-xs text-emerald-400">
-                            ✓ Auto-composed (ffmpeg)
-                          </p>
-                        ) : hasKey ? (
+                        {hasKey ? (
                           <p className="text-xs text-emerald-400">
                             ✓ {activeKey?.service} connected
                           </p>
                         ) : (
                           <p className="text-xs text-muted-foreground">
-                            {engine.required ? "⚠ Required — " : "Optional — "}
+                            ⚠ Required —{" "}
                             <span
                               className="underline cursor-pointer hover:text-primary"
                               onClick={() => navigate("/settings")}
@@ -767,24 +779,7 @@ export default function GenerateContent() {
               </CardContent>
             </Card>
 
-            {/* Missing Keys Notice */}
-            {missingKeys.length > 0 && (
-              <div className="p-4 rounded-xl border-2 border-amber-500/30 bg-amber-500/5">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-500">Some steps were skipped</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Missing API keys for: {missingKeys.join(", ")}. Add them in{" "}
-                      <span className="underline cursor-pointer text-primary" onClick={() => navigate("/settings")}>
-                        Settings
-                      </span>{" "}
-                      to unlock the full pipeline.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {/* Generated Video (show first as the main output) */}
             {generatedVideoUrl && (

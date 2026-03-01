@@ -143,4 +143,54 @@
 - [x] Correct key mapping: BFL FLUX (image), Venice.ai (image fallback), Runway ML (video)
 - [x] Merge Runway video with voiceover audio using ffmpeg
 - [x] Update vitest tests for video step (69 tests passing)
-- [ ] Build, push to GitHub and Railway
+- [x] Build, push to GitHub and Railway
+
+## Phase 17: Pipeline Polish — Duration Control, Video Preview, E2E Test
+- [x] Add video duration control (5s for reels/shorts, 10s for long-form) to pipeline
+- [x] Add duration selector UI in GenerateContent page
+- [x] Pass duration to Runway Gen-4 Turbo API
+- [x] Add video preview player in Content Library (watch before publishing)
+- [x] Test full pipeline end-to-end (script → voice → image → video)
+- [ ] Write vitest tests for new features
+- [ ] Build, push to GitHub
+
+## Phase 18: Bug Fixes & Browser Testing
+- [ ] Fix character creation bug (not working at the end of flow)
+- [ ] Test character creation flow end-to-end in browser
+- [ ] Test content generation flow in browser
+- [ ] Test content library (video preview player) in browser
+- [ ] Test settings page (API key saving) in browser
+- [ ] Update vitest tests for any fixes
+
+## Phase 19: Full Pipeline E2E Test & Bug Fixes
+- [x] Fix remaining TS errors (videoDuration type mismatch, updateUserOpenId)
+- [x] Run full end-to-end content generation pipeline test in browser
+- [x] Verify script generation step works
+- [x] Verify voice generation step works
+- [x] Verify thumbnail generation step works
+- [x] Verify video generation step works (Runway Gen-4 Turbo)
+- [x] Fix Runway BAD_OUTPUT error (use thumbnail instead of avatar as base image)
+- [ ] Update vitest tests
+- [ ] Build, checkpoint, push to GitHub
+
+## Phase 20: Pipeline Error Handling & Key Update
+- [ ] Update ElevenLabs API key to new one
+- [ ] Rewrite pipeline: ALL steps mandatory, no skipping. Stop immediately on any failure (no key OR API error)
+- [ ] Clear error messages: tell creator exactly what went wrong and how to fix it
+- [ ] Fix 2 TS errors (updateUserOpenId, videoDuration type)
+- [ ] Update frontend: remove skip UI, show stop/error state properly
+- [ ] Re-test full pipeline end-to-end
+- [ ] Update vitest tests for new error behavior
+
+## Phase 21: Character Avatar & Video Duration Expansion
+- [x] Add avatarUrl column to characters table in schema
+- [x] Add avatar generation step to CharacterWizard (Step 3: Design Your Character's Look)
+- [x] Generate character face/avatar using creator's image API key during creation
+- [x] Store avatar as character's visual identity, reuse in all content generation
+- [x] Update pipeline to use thumbnail as Runway input image (better quality than avatar)
+- [x] Expand video duration options: 5s, 10s, 20s, 30s, 60s
+- [x] Implement clip chaining for durations > 10s (chain multiple Runway generations + ffmpeg concat)
+- [x] Update ElevenLabs API key to new one (sk_46649a...)
+- [x] Full end-to-end pipeline test (character creation with avatar → content generation → library)
+- [x] Display character avatars in Characters page and Generate Content page
+- [ ] Update vitest tests

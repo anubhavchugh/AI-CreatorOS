@@ -35,6 +35,7 @@ import {
 import { createRazorpayOrder, handlePaymentVerification } from "./razorpay/razorpay";
 import { PLANS, type PlanKey } from "./razorpay/products";
 import { runContentPipeline, getProgress } from "./pipeline/contentPipeline";
+import { generateAvatar } from "./pipeline/avatarGenerator";
 
 export const appRouter = router({
   system: systemRouter,
@@ -113,6 +114,34 @@ export const appRouter = router({
           status: "draft",
         });
         return { id };
+      }),
+
+    generateAvatar: protectedProcedure
+      .input(z.object({
+        characterId: z.number().optional(),
+        characterName: z.string().min(1),
+        niche: z.string().default("general"),
+        visualStyle: z.enum(["photorealistic", "anime", "cartoon", "3d"]).default("photorealistic"),
+        appearance: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const result = await generateAvatar({
+          characterName: input.characterName,
+          niche: input.niche,
+          visualStyle: input.visualStyle,
+          appearance: input.appearance,
+          userId: ctx.user.id,
+        });
+
+        // If characterId is provided, update the character's avatarUrl
+        if (input.characterId) {
+          const character = await getCharacterById(input.characterId);
+          if (character && character.userId === ctx.user.id) {
+            await updateCharacter(input.characterId, { avatarUrl: result.avatarUrl });
+          }
+        }
+
+        return result;
       }),
 
     update: protectedProcedure
@@ -437,6 +466,7 @@ export const appRouter = router({
         platform: z.string().default("youtube"),
         tone: z.string().optional(),
         duration: z.string().optional(),
+        videoDuration: z.union([z.literal(5), z.literal(10), z.literal(20), z.literal(30), z.literal(60)]).optional(),
         additionalInstructions: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -454,6 +484,7 @@ export const appRouter = router({
           platform: input.platform,
           tone: input.tone,
           duration: input.duration,
+          videoDuration: input.videoDuration,
           additionalInstructions: input.additionalInstructions,
         });
 

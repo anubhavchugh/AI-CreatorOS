@@ -1,0 +1,15 @@
+{
+  "query": "SELECT service, apiKey, LENGTH(apiKey) as key_length FROM creator_api_keys WHERE service = 'elevenlabs'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JLMmhcj7UPMoCG.e54b35e04dec --database VYneUcnZvTL9FVkbHuDg6r --execute SELECT service, apiKey, LENGTH(apiKey) as key_length FROM creator_api_keys WHERE service = 'elevenlabs'",
+  "rows": [
+    {
+      "service": "elevenlabs",
+      "apiKey": "sk_46649a061cd1ca8ea8c689bf1e83e88c00709af50c5c499f",
+      "key_length": "51"
+    }
+  ],
+  "messages": [],
+  "stdout": "service\tapiKey\tkey_length\nelevenlabs\tsk_46649a061cd1ca8ea8c689bf1e83e88c00709af50c5c499f\t51\n",
+  "stderr": "",
+  "execution_time_ms": 1611
+}

@@ -1,0 +1,15 @@
+{
+  "query": "SELECT service, CONCAT(LEFT(apiKey, 10), '...', RIGHT(apiKey, 6)) as masked_key, isActive FROM creator_api_keys WHERE service = 'elevenlabs'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JLMmhcj7UPMoCG.e54b35e04dec --database VYneUcnZvTL9FVkbHuDg6r --execute SELECT service, CONCAT(LEFT(apiKey, 10), '...', RIGHT(apiKey, 6)) as masked_key, isActive FROM creator_api_keys WHERE service = 'elevenlabs'",
+  "rows": [
+    {
+      "service": "elevenlabs",
+      "masked_key": "sk_46649a0...5c499f",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "service\tmasked_key\tisActive\nelevenlabs\tsk_46649a0...5c499f\t1\n",
+  "stderr": "",
+  "execution_time_ms": 1658
+}

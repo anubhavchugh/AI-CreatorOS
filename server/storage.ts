@@ -63,9 +63,13 @@ export async function storagePut(
     })
   );
 
-  // Build the URL
+  // Build the URL — prefer public URL for Cloudflare R2
   let url: string;
-  if (ENV.s3Endpoint) {
+  if (ENV.s3PublicUrl) {
+    // Cloudflare R2 public bucket URL (e.g., https://pub-xxx.r2.dev)
+    const base = ENV.s3PublicUrl.replace(/\/+$/, "");
+    url = `${base}/${key}`;
+  } else if (ENV.s3Endpoint) {
     // S3-compatible provider — construct URL manually
     url = `${ENV.s3Endpoint}/${bucket}/${key}`;
   } else {

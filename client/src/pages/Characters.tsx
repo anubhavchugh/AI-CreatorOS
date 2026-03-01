@@ -124,8 +124,12 @@ export default function Characters() {
                 <div className={`relative h-36 overflow-hidden bg-gradient-to-br ${gradient}`}>
                   <div className="absolute inset-0 bg-gradient-to-t from-card via-card/40 to-transparent" />
                   <div className="absolute bottom-4 left-4 flex items-end gap-3">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/50 to-primary/20 flex items-center justify-center text-2xl font-bold ring-2 ring-background shadow-lg">
-                      {char.name.charAt(0)}
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/50 to-primary/20 flex items-center justify-center text-2xl font-bold ring-2 ring-background shadow-lg overflow-hidden">
+                      {char.avatarUrl ? (
+                        <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
+                      ) : (
+                        char.name.charAt(0)
+                      )}
                     </div>
                     <div>
                       <h3 className="text-lg font-bold">{char.name}</h3>

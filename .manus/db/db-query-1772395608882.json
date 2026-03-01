@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, openId, email, name, loginMethod, role FROM users;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JLMmhcj7UPMoCG.e54b35e04dec --database VYneUcnZvTL9FVkbHuDg6r --execute SELECT id, openId, email, name, loginMethod, role FROM users;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "aAADLibNAVse8z8hPFV9kM",
+      "email": "chugha@empliance.in",
+      "name": "Anubhav Chugh",
+      "loginMethod": "google",
+      "role": "admin"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\temail\tname\tloginMethod\trole\n1\taAADLibNAVse8z8hPFV9kM\tchugha@empliance.in\tAnubhav Chugh\tgoogle\tadmin\n",
+  "stderr": "",
+  "execution_time_ms": 1543
+}

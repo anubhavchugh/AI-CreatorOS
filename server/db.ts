@@ -75,6 +75,12 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function updateUserOpenId(id: number, openId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ openId }).where(eq(users.id, id));
+}
+
 export async function updateUserLastSignedIn(id: number) {
   const db = await getDb();
   if (!db) return;
