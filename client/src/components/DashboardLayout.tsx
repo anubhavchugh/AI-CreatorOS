@@ -21,7 +21,9 @@ import {
   Sun,
   Moon,
   Zap,
+  Shield,
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
   { path: "/monetization", label: "Monetization", icon: DollarSign },
   { path: "/fans", label: "Fan Interactions", icon: MessageCircle },
   { path: "/settings", label: "Settings", icon: Settings },
+  { path: "/admin", label: "Admin Panel", icon: Shield, adminOnly: true },
 ];
 
 interface DashboardLayoutProps {
@@ -44,6 +47,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -78,7 +82,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !(item as any).adminOnly || user?.role === "admin").map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
 

@@ -1,14 +1,17 @@
 /*
  * Landing Page — Marketing site for AI CreatorOS
- * Design: Dark hero with electric blue glow, character showcase, feature grid, CTA
+ * Design: Dark hero with electric blue glow, character showcase, feature grid, pricing, CTA
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { getLoginUrl } from "@/const";
 import {
   Zap, Users, Clapperboard, BarChart3, DollarSign, MessageCircle,
-  ArrowRight, Play, ChevronRight, Sun, Moon, Sparkles, Globe, Shield, Bot,
+  ArrowRight, Play, Sun, Moon, Sparkles, Globe, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,7 +36,7 @@ const features = [
   { icon: MessageCircle, title: "AI Fan Engagement", desc: "AI-powered DMs and comments that respond to fans 24/7 in your character's voice." },
 ];
 
-const characters = [
+const characterShowcase = [
   { name: "Nova", role: "Tech Reviewer", img: CHAR1, subs: "245K", platform: "YouTube" },
   { name: "Kai", role: "Gen-Z Entertainer", img: CHAR2, subs: "1.2M", platform: "TikTok" },
   { name: "Aura", role: "Wellness Guide", img: CHAR3, subs: "89K", platform: "Instagram" },
@@ -46,18 +49,116 @@ const stats = [
   { value: "< 30s", label: "Fan Response Time" },
 ];
 
+const pricingPlans = [
+  {
+    key: "free",
+    name: "Free",
+    price: "$0",
+    interval: "forever",
+    description: "Get started with AI content creation",
+    features: [
+      "1 AI Character",
+      "10 content pieces/month",
+      "Basic analytics",
+      "Community support",
+      "Watermarked exports",
+    ],
+    cta: "Start Free",
+    popular: false,
+  },
+  {
+    key: "pro",
+    name: "Pro",
+    price: "$29",
+    interval: "/month",
+    description: "Scale your AI content empire",
+    features: [
+      "10 AI Characters",
+      "Unlimited content",
+      "Advanced analytics",
+      "Priority support",
+      "No watermarks",
+      "Multi-platform distribution",
+      "Fan membership tools",
+      "Brand deal marketplace",
+    ],
+    cta: "Upgrade to Pro",
+    popular: true,
+  },
+  {
+    key: "enterprise",
+    name: "Enterprise",
+    price: "$99",
+    interval: "/month",
+    description: "For agencies and studios",
+    features: [
+      "Unlimited AI Characters",
+      "Unlimited content",
+      "White-label exports",
+      "Dedicated support",
+      "Custom AI model training",
+      "API access",
+      "Team collaboration",
+      "IP licensing tools",
+      "Revenue analytics suite",
+    ],
+    cta: "Go Enterprise",
+    popular: false,
+  },
+];
+
 export default function Landing() {
   const [email, setEmail] = useState("");
   const [, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated } = useAuth();
+
+  const joinWaitlist = trpc.waitlist.join.useMutation({
+    onSuccess: () => {
+      toast.success("You're on the waitlist! We'll be in touch soon.");
+      setEmail("");
+    },
+    onError: (err) => {
+      if (err.message.includes("Duplicate")) {
+        toast.info("You're already on the waitlist!");
+      } else {
+        toast.error("Something went wrong. Please try again.");
+      }
+      setEmail("");
+    },
+  });
+
+  const createCheckout = trpc.billing.createCheckout.useMutation({
+    onSuccess: (data) => {
+      toast.info("Redirecting to checkout...");
+      window.open(data.url, "_blank");
+    },
+    onError: () => {
+      toast.error("Failed to start checkout. Please try again.");
+    },
+  });
 
   const handleWaitlist = () => {
-    if (!email.includes("@")) {
+    if (!email || !email.includes("@")) {
       toast.error("Please enter a valid email address.");
       return;
     }
-    toast.success("You're on the waitlist! We'll be in touch soon.");
-    setEmail("");
+    joinWaitlist.mutate({ email, source: "landing" });
+  };
+
+  const handlePricingCta = (planKey: string) => {
+    if (!isAuthenticated) {
+      window.location.href = getLoginUrl();
+      return;
+    }
+    if (planKey === "free") {
+      navigate("/dashboard");
+    } else {
+      createCheckout.mutate({
+        plan: planKey as "pro" | "enterprise",
+        origin: window.location.origin,
+      });
+    }
   };
 
   return (
@@ -80,19 +181,26 @@ export default function Landing() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8">
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
-              Dashboard
-            </Button>
-            <Button size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5">
-              Get Started <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
+            {isAuthenticated ? (
+              <Button size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5">
+                Dashboard <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={() => (window.location.href = getLoginUrl())}>
+                  Sign In
+                </Button>
+                <Button size="sm" onClick={() => (window.location.href = getLoginUrl())} className="gap-1.5">
+                  Get Started <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 overflow-hidden">
-        {/* Background */}
         <div className="absolute inset-0 z-0">
           <img src={HERO_BG} alt="" className="w-full h-full object-cover opacity-20 dark:opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-b from-background via-background/80 to-background" />
@@ -127,8 +235,12 @@ export default function Landing() {
                   onKeyDown={(e) => e.key === "Enter" && handleWaitlist()}
                   className="flex-1 sm:w-72 h-11 px-4 rounded-l-xl border border-r-0 border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
-                <Button onClick={handleWaitlist} className="h-11 rounded-l-none rounded-r-xl px-6">
-                  Join Waitlist
+                <Button
+                  onClick={handleWaitlist}
+                  disabled={joinWaitlist.isPending}
+                  className="h-11 rounded-l-none rounded-r-xl px-6"
+                >
+                  {joinWaitlist.isPending ? "Joining..." : "Join Waitlist"}
                 </Button>
               </div>
               <Button variant="outline" size="lg" className="gap-2 h-11" onClick={() => navigate("/dashboard")}>
@@ -142,7 +254,6 @@ export default function Landing() {
             </motion.p>
           </motion.div>
 
-          {/* Hero Image */}
           <motion.div
             variants={fadeUp}
             className="mt-16 max-w-5xl mx-auto rounded-2xl overflow-hidden border border-border/50 shadow-2xl dark:glow-blue"
@@ -204,7 +315,7 @@ export default function Landing() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {characters.map((char) => (
+            {characterShowcase.map((char) => (
               <motion.div
                 key={char.name}
                 whileHover={{ y: -8 }}
@@ -267,8 +378,78 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Pricing */}
       <section id="pricing" className="py-24 bg-accent/20">
+        <div className="container">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <Badge variant="outline" className="mb-4 px-3 py-1 text-xs border-primary/30 bg-primary/5">Pricing</Badge>
+            <h2 className="text-3xl font-bold tracking-tight">Simple, Transparent Pricing</h2>
+            <p className="text-muted-foreground mt-4">
+              Start free. Upgrade when you're ready to scale. Cancel anytime.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {pricingPlans.map((plan) => (
+              <motion.div
+                key={plan.key}
+                whileHover={{ y: -4 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              >
+                <Card
+                  className={`relative overflow-hidden h-full ${
+                    plan.popular
+                      ? "border-primary dark:glow-blue-border"
+                      : "border-border/50"
+                  }`}
+                >
+                  {plan.popular && (
+                    <div className="absolute top-0 right-0">
+                      <Badge className="rounded-none rounded-bl-lg bg-primary text-primary-foreground text-xs px-3 py-1">
+                        Most Popular
+                      </Badge>
+                    </div>
+                  )}
+                  <CardContent className="p-8 flex flex-col h-full">
+                    <div>
+                      <h3 className="text-xl font-bold">{plan.name}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                      <div className="mt-6 flex items-baseline gap-1">
+                        <span className="text-4xl font-bold font-mono">{plan.price}</span>
+                        <span className="text-muted-foreground text-sm">{plan.interval}</span>
+                      </div>
+                    </div>
+
+                    <ul className="mt-8 space-y-3 flex-1">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-3 text-sm">
+                          <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button
+                      onClick={() => handlePricingCta(plan.key)}
+                      disabled={createCheckout.isPending}
+                      className={`mt-8 w-full ${
+                        plan.popular ? "" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                      }`}
+                      variant={plan.popular ? "default" : "secondary"}
+                      size="lg"
+                    >
+                      {plan.cta}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-24">
         <div className="container">
           <div className="max-w-2xl mx-auto text-center space-y-6">
             <h2 className="text-3xl font-bold tracking-tight">Ready to Build Your AI Content Empire?</h2>
@@ -276,13 +457,15 @@ export default function Landing() {
               Join the waitlist and be among the first to create AI characters that earn revenue 24/7.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Button size="lg" onClick={() => navigate("/dashboard")} className="gap-2">
-                Start Building <ArrowRight className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="lg" onClick={() => navigate("/dashboard")} className="gap-2">
-                <Play className="w-4 h-4" />
-                Try the Demo
-              </Button>
+              {isAuthenticated ? (
+                <Button size="lg" onClick={() => navigate("/dashboard")} className="gap-2">
+                  Go to Dashboard <ArrowRight className="w-4 h-4" />
+                </Button>
+              ) : (
+                <Button size="lg" onClick={() => (window.location.href = getLoginUrl())} className="gap-2">
+                  Get Started Free <ArrowRight className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
         </div>

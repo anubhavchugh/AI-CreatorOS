@@ -14,6 +14,8 @@ import Monetization from "./pages/Monetization";
 import FanInteractions from "./pages/FanInteractions";
 import Settings from "./pages/Settings";
 import Landing from "./pages/Landing";
+import AdminPanel from "./pages/AdminPanel";
+import CharacterWizard from "./pages/CharacterWizard";
 
 function DashboardRouter() {
   return (
@@ -21,30 +23,34 @@ function DashboardRouter() {
       <Switch>
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/characters" component={Characters} />
+        <Route path="/characters/new" component={CharacterWizard} />
         <Route path="/pipeline" component={ContentPipeline} />
         <Route path="/calendar" component={ContentCalendar} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/monetization" component={Monetization} />
         <Route path="/fans" component={FanInteractions} />
         <Route path="/settings" component={Settings} />
+        <Route path="/admin" component={AdminPanel} />
         <Route component={Dashboard} />
       </Switch>
     </DashboardLayout>
   );
 }
+
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path="/" component={Landing} />
       <Route path="/dashboard" nest component={DashboardRouter} />
       <Route path="/characters" component={DashboardRouter} />
+      <Route path="/characters/new" component={DashboardRouter} />
       <Route path="/pipeline" component={DashboardRouter} />
       <Route path="/calendar" component={DashboardRouter} />
       <Route path="/analytics" component={DashboardRouter} />
       <Route path="/monetization" component={DashboardRouter} />
       <Route path="/fans" component={DashboardRouter} />
       <Route path="/settings" component={DashboardRouter} />
+      <Route path="/admin" component={DashboardRouter} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
