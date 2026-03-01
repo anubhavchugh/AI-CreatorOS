@@ -24,6 +24,7 @@ import {
   Shield,
   Sparkles,
   FolderOpen,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [location, navigate] = useLocation();
   const { theme, toggleTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -200,6 +201,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </TooltipContent>
             )}
           </Tooltip>
+
+          {/* Logout */}
+          {user && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => logout()}
+                  className={`w-full ${collapsed ? "justify-center px-0" : "justify-start"} text-muted-foreground hover:text-red-500`}
+                >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  {!collapsed && <span className="ml-3 text-sm">Sign Out</span>}
+                </Button>
+              </TooltipTrigger>
+              {collapsed && (
+                <TooltipContent side="right" sideOffset={8}>
+                  Sign Out
+                </TooltipContent>
+              )}
+            </Tooltip>
+          )}
         </div>
       </motion.aside>
 

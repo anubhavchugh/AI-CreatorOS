@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, email, name, role, clerk_id FROM users LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4JLMmhcj7UPMoCG.e54b35e04dec --database VYneUcnZvTL9FVkbHuDg6r --execute SELECT id, email, name, role, clerk_id FROM users LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'clerk_id' in 'field list'"
+  ]
+}

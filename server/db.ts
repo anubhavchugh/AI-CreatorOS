@@ -398,3 +398,68 @@ export async function getRecentPayments(limit = 20) {
     .orderBy(desc(payments.createdAt))
     .limit(limit);
 }
+
+// ==================== DASHBOARD STATS ====================
+
+export async function getDashboardStats(userId: number) {
+  const db = await getDb();
+  if (!db) return { totalCharacters: 0, totalContent: 0, activeCharacters: 0, publishedContent: 0 };
+
+  const [charCount] = await db
+    .select({ count: count() })
+    .from(characters)
+    .where(eq(characters.userId, userId));
+
+  const [activeChars] = await db
+    .select({ count: count() })
+    .from(characters)
+    .where(and(eq(characters.userId, userId), eq(characters.status, "active")));
+
+  const [contentCount] = await db
+    .select({ count: count() })
+    .from(contentItems)
+    .where(eq(contentItems.userId, userId));
+
+  const [publishedCount] = await db
+    .select({ count: count() })
+    .from(contentItems)
+    .where(and(eq(contentItems.userId, userId), eq(contentItems.status, "published")));
+
+  return {
+    totalCharacters: charCount?.count || 0,
+    activeCharacters: activeChars?.count || 0,
+    totalContent: contentCount?.count || 0,
+    publishedContent: publishedCount?.count || 0,
+  };
+}
+
+export async function getDashboardCharacters(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(characters)
+    .where(eq(characters.userId, userId))
+    .orderBy(desc(characters.updatedAt))
+    .limit(5);
+}
+
+export async function getDashboardPipeline(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      id: contentItems.id,
+      title: contentItems.title,
+      status: contentItems.status,
+      platform: contentItems.platform,
+      type: contentItems.type,
+      createdAt: contentItems.createdAt,
+      characterName: characters.name,
+    })
+    .from(contentItems)
+    .leftJoin(characters, eq(contentItems.characterId, characters.id))
+    .where(eq(contentItems.userId, userId))
+    .orderBy(desc(contentItems.updatedAt))
+    .limit(10);
+}

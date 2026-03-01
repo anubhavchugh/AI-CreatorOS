@@ -28,6 +28,9 @@ import {
   getUserStats,
   getRevenueStats,
   getRecentPayments,
+  getDashboardStats,
+  getDashboardCharacters,
+  getDashboardPipeline,
 } from "./db";
 import { createRazorpayOrder, handlePaymentVerification } from "./razorpay/razorpay";
 import { PLANS, type PlanKey } from "./razorpay/products";
@@ -41,6 +44,19 @@ export const appRouter = router({
     // Logout is handled client-side by Clerk's signOut()
     logout: publicProcedure.mutation(() => {
       return { success: true } as const;
+    }),
+  }),
+
+  // ==================== DASHBOARD ====================
+  dashboard: router({
+    stats: protectedProcedure.query(async ({ ctx }) => {
+      return getDashboardStats(ctx.user.id);
+    }),
+    characters: protectedProcedure.query(async ({ ctx }) => {
+      return getDashboardCharacters(ctx.user.id);
+    }),
+    pipeline: protectedProcedure.query(async ({ ctx }) => {
+      return getDashboardPipeline(ctx.user.id);
     }),
   }),
 

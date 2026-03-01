@@ -116,5 +116,11 @@
 - [x] Push fix to GitHub
 
 ## Phase 13: Fix Clerk Auth on Railway
-- [ ] Fix Clerk sign-in/sign-up sub-route 404 (e.g. /sign-up/verify-email-address)
-- [ ] Push fix to GitHub and verify on Railway
+- [x] Fix Clerk sign-in/sign-up sub-route 404 (e.g. /sign-up/verify-email-address)
+- [x] Push fix to GitHub and verify on Railway
+
+## Phase 14: Dashboard Polish & Launch Readiness
+- [x] Replace dummy/hardcoded data on Dashboard with real data from DB
+- [x] Add logout button to sidebar
+- [x] Fix admin panel visibility in sidebar (already works via useAuth role check)
+- [x] Review character creation flow for launch readiness
