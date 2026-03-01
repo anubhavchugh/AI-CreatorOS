@@ -35,6 +35,10 @@ COPY patches/ ./patches/
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
+# Install drizzle-kit separately for runtime migrations
+# (it's a devDependency but needed at startup to run drizzle-kit migrate)
+RUN pnpm add drizzle-kit tsx
+
 # Copy built output from builder
 COPY --from=builder /app/dist ./dist
 

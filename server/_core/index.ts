@@ -53,9 +53,13 @@ async function startServer() {
   // Wrap in try-catch so the server starts even if Clerk keys are missing
   try {
     const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+    const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY || process.env.VITE_CLERK_PUBLISHABLE_KEY;
     if (clerkSecretKey) {
       const { clerkMiddleware } = await import("@clerk/express");
-      app.use(clerkMiddleware());
+      app.use(clerkMiddleware({
+        secretKey: clerkSecretKey,
+        publishableKey: clerkPublishableKey,
+      }));
       console.log("[Auth] Clerk middleware initialized");
     } else {
       console.warn("[Auth] CLERK_SECRET_KEY not set — auth disabled. Set it in your environment variables.");
